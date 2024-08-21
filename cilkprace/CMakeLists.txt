@@ -1,4 +1,4 @@
-# Build for the Cilkgraph runtime support library.
+# Build for the Cilkprace runtime support library.
 
 set(CILKPRACE_SOURCES
   cilkprace.cpp
@@ -26,7 +26,7 @@ set(CILKPRACE_COMMON_LIBS ${SANITIZER_CXX_ABI_LIBRARY} ${SANITIZER_COMMON_LINK_L
 
 set(CILKPRACE_DYNAMIC_LIBS ${CILKPRACE_COMMON_LIBS})
 
-# Build Cilkgraph runtimes shipped with Clang.
+# Build Cilkprace runtimes shipped with Clang.
 add_cilktools_component(cilkprace)
 
 if (APPLE)

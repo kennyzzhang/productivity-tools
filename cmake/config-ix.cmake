@@ -413,6 +413,7 @@ else()
   filter_available_targets(CSI_SUPPORTED_ARCH ${ALL_CSI_SUPPORTED_ARCH})
   filter_available_targets(CILKSAN_SUPPORTED_ARCH ${ALL_CILKSAN_SUPPORTED_ARCH})
   filter_available_targets(CILKSCALE_SUPPORTED_ARCH ${ALL_CILKSCALE_SUPPORTED_ARCH})
+  filter_available_targets(CILKPRACE_SUPPORTED_ARCH ${ALL_CILKPRACE_SUPPORTED_ARCH})
 endif()
 
 if (MSVC)

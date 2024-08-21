@@ -37,12 +37,10 @@ private:
 
       RAII(decltype(this_) this_) : this_(this_) {
         reducer_register(this_.outs_red);
-        reducer_register(this_.callg);
       }
 
       ~RAII() {
         reducer_unregister(this_.outs_red);
-        reducer_unregister(this_.callg);
       }
     } raii;
   } register_reducers = {.raii{*this}};
