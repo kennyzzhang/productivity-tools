@@ -105,7 +105,7 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
       << ", vtab=" << prop.is_vtable_access << ", const=" << prop.is_constant
       << ", stack=" << prop.is_on_stack << ", cap=" << prop.may_be_captured
       << ", atomic=" << prop.is_atomic << ", threadlocal="
-      << prop.is_thread_local << ", basic_read_before_write"
+      << prop.is_thread_local << ", basic_read_before_write="
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
 }
@@ -119,7 +119,7 @@ CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
       << ", vtab=" << prop.is_vtable_access << ", const=" << prop.is_constant
       << ", stack=" << prop.is_on_stack << ", cap=" << prop.may_be_captured
       << ", atomic=" << prop.is_atomic << ", threadlocal="
-      << prop.is_thread_local << ", basic_read_before_write"
+      << prop.is_thread_local << ", basic_read_before_write="
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
 }
