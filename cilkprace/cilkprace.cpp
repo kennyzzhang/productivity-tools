@@ -102,9 +102,9 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
   tool->outs_red
       << "[W" << worker_number() << "] before_load(lid=" << load_id << ", addr="
       << addr << ", nb=" << num_bytes << ", align=" << prop.alignment
-      << ", vtab=" << prop.is_vtable_access << ", const" << prop.is_constant
+      << ", vtab=" << prop.is_vtable_access << ", const=" << prop.is_constant
       << ", stack=" << prop.is_on_stack << ", cap=" << prop.may_be_captured
-      << ", atomic=" << prop.is_atomic << ", threadlocal"
+      << ", atomic=" << prop.is_atomic << ", threadlocal="
       << prop.is_thread_local << ", basic_read_before_write"
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
@@ -116,9 +116,9 @@ CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
   tool->outs_red
       << "[W" << worker_number() << "] after_load(lid=" << load_id << ", addr="
       << addr << ", nb=" << num_bytes << ", align=" << prop.alignment
-      << ", vtab=" << prop.is_vtable_access << ", const" << prop.is_constant
+      << ", vtab=" << prop.is_vtable_access << ", const=" << prop.is_constant
       << ", stack=" << prop.is_on_stack << ", cap=" << prop.may_be_captured
-      << ", atomic=" << prop.is_atomic << ", threadlocal"
+      << ", atomic=" << prop.is_atomic << ", threadlocal="
       << prop.is_thread_local << ", basic_read_before_write"
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
@@ -130,10 +130,10 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
   tool->outs_red
       << "[W" << worker_number() << "] before_store(sid=" << store_id
       << ", addr=" << addr << ", nb=" << num_bytes << ", align="
-      << prop.alignment << ", vtab=" << prop.is_vtable_access << ", const"
+      << prop.alignment << ", vtab=" << prop.is_vtable_access << ", const="
       << prop.is_constant << ", stack=" << prop.is_on_stack << ", cap="
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
-      << ", threadlocal" << prop.is_thread_local << ")" << std::endl;
+      << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
 }
 
@@ -143,10 +143,10 @@ CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
   tool->outs_red
       << "[W" << worker_number() << "] after_store(sid=" << store_id
       << ", addr=" << addr << ", nb=" << num_bytes << ", align="
-      << prop.alignment << ", vtab=" << prop.is_vtable_access << ", const"
+      << prop.alignment << ", vtab=" << prop.is_vtable_access << ", const="
       << prop.is_constant << ", stack=" << prop.is_on_stack << ", cap="
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
-      << ", threadlocal" << prop.is_thread_local << ")" << std::endl;
+      << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
 }
 
@@ -229,7 +229,7 @@ void __csi_before_allocfn(const csi_id_t allocfn_id, size_t size,
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] before_allocfn(afid=" << allocfn_id
-      << ", size" << size << ", num=" << num << ", align=" << alignment
+      << ", size=" << size << ", num=" << num << ", align=" << alignment
       << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty << ")"
       << std::endl;
 #endif
@@ -242,7 +242,7 @@ void __csi_after_allocfn(const csi_id_t allocfn_id, const void *addr,
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] after_allocfn(afid=" << allocfn_id
-      << ", addr=" << addr << ", size" << size << ", num=" << num << ", align="
+      << ", addr=" << addr << ", size=" << size << ", num=" << num << ", align="
       << alignment << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty
       << ")" << std::endl;
 #endif
