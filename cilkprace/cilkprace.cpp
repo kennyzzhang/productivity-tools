@@ -5,6 +5,8 @@
 #include <iostream>
 #include <memory>
 
+#include "sstack.h"
+
 #define TRACE_CALLS 1
 
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
@@ -13,6 +15,7 @@ class CilkgraphImpl_t {
   std::unique_ptr<std::ofstream> outf;
 public:
   cilk::ostream_reducer<char> outs_red;
+  shadow_stack_t stack;
 
 private:
   // Need to manually register reducer
@@ -98,6 +101,7 @@ void __csi_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id,
 
 CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
                             const int32_t num_bytes, const load_prop_t prop) {
+return;
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] before_load(lid=" << load_id << ", addr="
@@ -112,6 +116,7 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
 
 CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
                            const int32_t num_bytes, const load_prop_t prop) {
+return;
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] after_load(lid=" << load_id << ", addr="
@@ -126,6 +131,7 @@ CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
 
 CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
                              const int32_t num_bytes, const store_prop_t prop) {
+  tool->stack.back().sw.insert((uint64_t)addr);
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] before_store(sid=" << store_id
@@ -139,6 +145,7 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
                             const int32_t num_bytes, const store_prop_t prop) {
+return;
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] after_store(sid=" << store_id
@@ -152,6 +159,7 @@ CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
 
 CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
                              const task_prop_t prop) {
+  tool->stack.push();
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
@@ -163,6 +171,34 @@ CILKTOOL_API
 void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
                      const csi_id_t detach_id, const unsigned sync_reg,
                      const task_exit_prop_t prop) {
+  auto last = tool->stack.pop();
+  auto& back = tool->stack.back();
+  bool disjoint = is_disjoint(last.sw , back.pw);
+  assert(disjoint && "Race condition!");
+  if (!disjoint)
+    tool->outs_red << "RACE CONDITION" << std::endl;;
+  
+  tool->outs_red << "back pw: ";
+  for (auto x : back.pw)
+    tool->outs_red << (void*)x << ", ";
+  tool->outs_red << std::endl;
+  tool->outs_red << "last sw: ";
+  for (auto x : last.sw)
+    tool->outs_red << (void*)x << ", ";
+  tool->outs_red << std::endl;
+
+  merge_into(back.pw, last.sw);
+  
+  tool->outs_red << "back pw: ";
+  for (auto x : back.pw)
+    tool->outs_red << (void*)x << ", ";
+  tool->outs_red << std::endl;
+  tool->outs_red << "last sw: ";
+  for (auto x : last.sw)
+    tool->outs_red << (void*)x << ", ";
+  tool->outs_red << std::endl;
+  
+
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] task_exit(teid=" << task_exit_id
@@ -204,6 +240,11 @@ void __csi_before_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 
 CILKTOOL_API
 void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
+  auto& back = tool->stack.back();
+  
+  merge_into(back.sw, back.pw);
+
+  
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
