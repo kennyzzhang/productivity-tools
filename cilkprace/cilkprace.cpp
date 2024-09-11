@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "sstack.h"
+#include "mreducer.h"
 
 #define TRACE_CALLS 1
 
@@ -15,7 +16,7 @@ class CilkgraphImpl_t {
   std::unique_ptr<std::ofstream> outf;
 public:
   cilk::ostream_reducer<char> outs_red;
-  shadow_stack_t stack;
+  mreducer<shadow_stack_t> stack;
 
 private:
   // Need to manually register reducer
