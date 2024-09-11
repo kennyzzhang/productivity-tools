@@ -174,30 +174,14 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
   auto last = tool->stack.pop();
   auto& back = tool->stack.back();
   bool disjoint = is_disjoint(last.sw , back.pw);
-  assert(disjoint && "Race condition!");
+//  assert(disjoint && "Race condition!");
   if (!disjoint)
     tool->outs_red << "RACE CONDITION" << std::endl;;
   
-  tool->outs_red << "back pw: ";
-  for (auto x : back.pw)
-    tool->outs_red << (void*)x << ", ";
-  tool->outs_red << std::endl;
-  tool->outs_red << "last sw: ";
-  for (auto x : last.sw)
-    tool->outs_red << (void*)x << ", ";
-  tool->outs_red << std::endl;
+  tool->outs_red << "back pw: " << back.pw << std::endl
+      << "last sw: " << last.sw << std::endl;
 
   merge_into(back.pw, last.sw);
-  
-  tool->outs_red << "back pw: ";
-  for (auto x : back.pw)
-    tool->outs_red << (void*)x << ", ";
-  tool->outs_red << std::endl;
-  tool->outs_red << "last sw: ";
-  for (auto x : last.sw)
-    tool->outs_red << (void*)x << ", ";
-  tool->outs_red << std::endl;
-  
 
 #ifdef TRACE_CALLS
   tool->outs_red
@@ -241,10 +225,13 @@ void __csi_before_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 CILKTOOL_API
 void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
   auto& back = tool->stack.back();
-  
-  merge_into(back.sw, back.pw);
 
-  
+  tool->outs_red << "back pw: " << back.pw << std::endl
+      << "back sw: " << back.sw << std::endl;
+
+  merge_into(back.sw, back.pw);
+  back.pw.clear();
+
 #ifdef TRACE_CALLS
   tool->outs_red
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="

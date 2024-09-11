@@ -15,6 +15,12 @@ struct shadow_stack_frame_t {
   set_t pw;
 };
 
+std::ostream& operator<<(std::ostream& os, set_t s) {
+  for (auto x : s)
+    os << (void*)x << ", ";
+  return os;
+}
+
 bool is_disjoint(set_t& small, set_t& large)
 {
   if (small.size() > large.size()) // Small into large merging
