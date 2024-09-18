@@ -16,7 +16,8 @@ class CilkgraphImpl_t {
   std::unique_ptr<std::ofstream> outf;
 public:
   cilk::ostream_reducer<char> outs_red;
-  shadow_stack_t stack;
+  shadow_stack_reducer stack;
+  //shadow_stack_t stack;
 
 private:
   // Need to manually register reducer
@@ -58,7 +59,8 @@ public:
       if (envstr)
         return *(outf = std::make_unique<std::ofstream>(envstr));
       return std::cout;
-    }()) // Not only are reducer callbacks not implemented, the hyperobject
+    }()), stack()
+         // Not only are reducer callbacks not implemented, the hyperobject
          // is not even default constructed unless explicitly constructed.
   {}
 

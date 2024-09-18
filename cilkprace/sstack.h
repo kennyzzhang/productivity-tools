@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cassert>
+#include <cilk/cilk.h>
 
 using set_t = std::unordered_set<uint64_t>;
 
@@ -51,25 +52,30 @@ public:
   shadow_stack_t() : frames(1) {
   }
   
+  shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames) {
+  }
+
   shadow_stack_frame_t push() {
     frames.emplace_back();
     return frames.back();
   }
 
   shadow_stack_frame_t pop() {
-    assert(!frames.empty() && "Trying to pop from empty shadow stack!");
+    assert(!frames.empty() && "Trying to pop() from empty shadow stack!");
     auto ret = frames.back();
     frames.pop_back();
     return ret;
   }
 
   shadow_stack_frame_t& back() {
+    assert(!frames.empty() && "Trying to back() from empty shadow stack!");
     return frames.back();
   }
 
   /// Reducer support
 
   static void identity(void *view) {
+    assert(false);
     new (view) shadow_stack_t();
   }
 
@@ -87,7 +93,7 @@ public:
   }
 };
 
-typedef shadow_stack_t _Hyperobject(shadow_stack_t::identity,
+typedef shadow_stack_t cilk_reducer(shadow_stack_t::identity,
                                     shadow_stack_t::reduce)
   shadow_stack_reducer;
 
