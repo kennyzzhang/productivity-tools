@@ -75,7 +75,6 @@ public:
   /// Reducer support
 
   static void identity(void *view) {
-    assert(false);
     new (view) shadow_stack_t();
   }
 
@@ -83,12 +82,16 @@ public:
     shadow_stack_t *left = static_cast<shadow_stack_t *>(left_view);
     shadow_stack_t *right = static_cast<shadow_stack_t *>(right_view);
 
-    assert(1 == right->frames.size());
-
 #if TRACE_CALLS
     fprintf(stderr, "Reducing ");
 #endif
+    assert(1 == right->frames.size());
 
+    //Invariant: steals and reducing shouldn't change the stack's state at the end    
+    // OR what checks are done for races
+
+    //merge_into(left->back(), right->back());
+    //merge_into(left->back(), right->back());
     right->~shadow_stack_t();
   }
 };
