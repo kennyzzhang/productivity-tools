@@ -16,7 +16,7 @@ class CilkgraphImpl_t {
   std::unique_ptr<std::ofstream> outf;
 public:
   cilk::ostream_reducer<char> outs_red;
-  mreducer<shadow_stack_t> stack;
+  shadow_stack_t stack;
 
 private:
   // Need to manually register reducer
@@ -41,10 +41,12 @@ private:
 
       RAII(decltype(this_) this_) : this_(this_) {
         reducer_register(this_.outs_red);
+        reducer_register(this_.stack);
       }
 
       ~RAII() {
         reducer_unregister(this_.outs_red);
+        reducer_unregister(this_.stack);
       }
     } raii;
   } register_reducers = {.raii{*this}};
