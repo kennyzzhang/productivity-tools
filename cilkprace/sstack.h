@@ -9,6 +9,8 @@
 using set_t = std::unordered_set<uint64_t>;
 
 // Type for a shadow stack frame
+// Accesses are stored in the serial section
+// The Parallel section stores dead task's parallel writes
 struct shadow_stack_frame_t {
   set_t sr;
   set_t sw;
@@ -89,9 +91,19 @@ public:
 
     //Invariant: steals and reducing shouldn't change the stack's state at the end    
     // OR what checks are done for races
+    // This is like a sync
+    // BUT it means that task exits have used incomplete information
+    // So it's like a soft task exit
+  
+    // Pretend this is a sync
+    merge_into(right->back().sw, right->back().pw);
+  
+    // Soft Task Exit
+    bool disjoint = is_disjoint(left->back().pw, right->back().sw);
+    if (!disjoint) 
+      fprintf(stderr, "\n\nRACE CONDITION\n\n");
 
-    //merge_into(left->back(), right->back());
-    //merge_into(left->back(), right->back());
+    merge_into(left->back().pw, right->back().sw);
     right->~shadow_stack_t();
   }
 };

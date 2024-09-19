@@ -64,8 +64,8 @@ public:
          // is not even default constructed unless explicitly constructed.
   {}
 
-  ~CilkgraphImpl_t() {
-  }
+  ~CilkgraphImpl_t() {}
+
 };
 
 static std::unique_ptr<CilkgraphImpl_t> tool =
