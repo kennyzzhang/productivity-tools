@@ -5,10 +5,11 @@
 #include <iostream>
 #include <memory>
 
+#define TRACE_CALLS 1
+
 #include "sstack.h"
 #include "mreducer.h"
 
-#define TRACE_CALLS 1
 
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
 

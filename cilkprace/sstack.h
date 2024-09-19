@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <vector>
 #include <cassert>
+#include <iostream>
 #include <cilk/cilk.h>
 
 using set_t = std::unordered_set<uint64_t>;
@@ -88,7 +89,9 @@ public:
     shadow_stack_t *right = static_cast<shadow_stack_t *>(right_view);
 
 #if TRACE_CALLS
-    fprintf(stderr, "Reducing ");
+    std::cerr << "Reducing " << std::endl;
+    std::cerr << "right->back().pw: " << right->back().pw << std::endl;
+    std::cerr << "right->back().sw: " <<  right->back().sw << std::endl;
 #endif
     assert(1 == right->frames.size());
 
@@ -105,7 +108,12 @@ public:
     // Soft Task Exit
     bool disjoint = is_disjoint(left->back().pw, right->back().sw);
     if (!disjoint) 
-      fprintf(stderr, "\n\nRACE CONDITION (reducer)\n\n");
+    {
+      std::cerr << "\n\nRACE CONDITION (reducer)" << std::endl;
+      std::cerr << "left->back().pw: " << left->back().pw << std::endl;
+      std::cerr << "right->back().sw: " <<  right->back().sw << std::endl;
+      std::cerr << "RACE CONDITION (reducer)\n\n" << std::endl;
+    }
 
     merge_into(left->back().pw, right->back().sw);
     right->~shadow_stack_t();
