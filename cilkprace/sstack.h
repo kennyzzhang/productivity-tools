@@ -53,6 +53,9 @@ private:
 public:
   shadow_stack_t() : frames(1) {
   }
+  ~shadow_stack_t() {
+    assert(frames.size() <= 1 && "Shadow stack destructed with information!");
+  }
   
   shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames) {
   }
@@ -97,11 +100,12 @@ public:
   
     // Pretend this is a sync
     merge_into(right->back().sw, right->back().pw);
+    right->back().pw.clear();
   
     // Soft Task Exit
     bool disjoint = is_disjoint(left->back().pw, right->back().sw);
     if (!disjoint) 
-      fprintf(stderr, "\n\nRACE CONDITION\n\n");
+      fprintf(stderr, "\n\nRACE CONDITION (reducer)\n\n");
 
     merge_into(left->back().pw, right->back().sw);
     right->~shadow_stack_t();

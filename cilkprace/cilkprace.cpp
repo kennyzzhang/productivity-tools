@@ -181,7 +181,7 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
   bool disjoint = is_disjoint(last.sw , back.pw);
 //  assert(disjoint && "Race condition!");
   if (!disjoint)
-    tool->outs_red << "RACE CONDITION" << std::endl;;
+    tool->outs_red << "\n\nRACE CONDITION\n\n" << std::endl;;
   
   tool->outs_red << "back pw: " << back.pw << std::endl
       << "last sw: " << last.sw << std::endl;
