@@ -7,6 +7,8 @@
 #include <iostream>
 #include <cilk/cilk.h>
 
+#include "outs_red.h"
+
 using set_t = std::unordered_set<uint64_t>;
 
 // Type for a shadow stack frame
@@ -28,6 +30,9 @@ std::ostream& operator<<(std::ostream& os, set_t s) {
 
 bool is_disjoint(set_t& small, set_t& large)
 {
+  #ifdef TRACE_CALLS
+  outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
+  #endif
   if (small.size() > large.size()) // Small into large merging
     return is_disjoint(large, small);
   for (auto access : small)
@@ -41,6 +46,10 @@ void merge_into(set_t& large, set_t& small)
 {
   if (small.size() > large.size()) // Small into large merging
     std::swap(small, large);
+  
+  #ifdef TRACE_CALLS
+  outs_red << "merge " << small << std::endl << "into " << large << std::endl;
+  #endif
   
   for (auto access : small)
     large.insert(access);
@@ -83,6 +92,9 @@ public:
   // and clears the has_children flag
   // Intended to be used during a sync
   void enter_serial() {
+#ifdef TRACE_CALLS
+    outs_red << "enter_serial" << std::endl;
+#endif
     merge_into(back().sw, back().pw);
     back().pw.clear();
     back().has_children = false;
@@ -91,6 +103,9 @@ public:
   // Merges oth with the current stack frame as if they occurred in parallel.
   // Returns true if the two stack frames are disjoint
   bool attach(shadow_stack_frame_t& oth) {
+#ifdef TRACE_CALLS
+    outs_red << "attach" << std::endl;
+#endif
     bool disjoint = is_disjoint(oth.sw, back().pw);
     merge_into(back().pw, oth.sw);
 
@@ -99,12 +114,18 @@ public:
 
   // Declare that the current stack frame has children and create a stack frame for the child
   void before_detach() {
+#ifdef TRACE_CALLS
+    outs_red << "before_detach" << std::endl;
+#endif
     back().has_children = true;
     push();
   }
   
   // Registers a write to the current frame
   void register_write(uint64_t addr) {
+#ifdef TRACE_CALLS
+    outs_red << "register_write on " << addr << std::endl;
+#endif
     if (back().has_children)
       back().pw.insert(addr);    
     else

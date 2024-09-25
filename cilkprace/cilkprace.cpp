@@ -47,16 +47,12 @@ private:
       CilkgraphImpl_t& this_;
 
       RAII(decltype(this_) this_) : this_(this_) {
-        //reducer_register(this_.outs_red);
         reducer_register(outs_red);
         reducer_register(this_.stack);
         const char* envstr = getenv("CILKSCALE_OUT");
-        //outs_red = cilk::ostream_reducer<char>(envstr ? *(outf = std::make_unique<std::ofstream>(envstr)) : std::cout);
-        //outs_red << "TEST" << std::endl;
       }
 
       ~RAII() {
-        //reducer_unregister(this_.outs_red);
         reducer_unregister(outs_red);
         reducer_unregister(this_.stack);
       }
