@@ -8,15 +8,20 @@
 #define TRACE_CALLS 1
 
 #include "sstack.h"
-#include "mreducer.h"
-
+#include "outs_red.h"
 
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
 
+std::unique_ptr<std::ofstream> outf;
+cilk::ostream_reducer<char> outs_red([]() -> std::basic_ostream<char>& {
+            const char* envstr = getenv("CILKSCALE_OUT");
+            if (envstr)
+            return *(outf = std::make_unique<std::ofstream>(envstr));
+            return std::cout;
+            }());
+
 class CilkgraphImpl_t {
-  std::unique_ptr<std::ofstream> outf;
 public:
-  cilk::ostream_reducer<char> outs_red;
   shadow_stack_reducer stack;
   //shadow_stack_t stack;
 
@@ -42,25 +47,24 @@ private:
       CilkgraphImpl_t& this_;
 
       RAII(decltype(this_) this_) : this_(this_) {
-        reducer_register(this_.outs_red);
+        //reducer_register(this_.outs_red);
+        reducer_register(outs_red);
         reducer_register(this_.stack);
+        const char* envstr = getenv("CILKSCALE_OUT");
+        //outs_red = cilk::ostream_reducer<char>(envstr ? *(outf = std::make_unique<std::ofstream>(envstr)) : std::cout);
+        //outs_red << "TEST" << std::endl;
       }
 
       ~RAII() {
-        reducer_unregister(this_.outs_red);
+        //reducer_unregister(this_.outs_red);
+        reducer_unregister(outs_red);
         reducer_unregister(this_.stack);
       }
     } raii;
   } register_reducers = {.raii{*this}};
 
 public:
-  CilkgraphImpl_t() :
-    outs_red([this]() -> std::basic_ostream<char>& {
-      const char* envstr = getenv("CILKSCALE_OUT");
-      if (envstr)
-        return *(outf = std::make_unique<std::ofstream>(envstr));
-      return std::cout;
-    }()), stack()
+  CilkgraphImpl_t() : stack()
          // Not only are reducer callbacks not implemented, the hyperobject
          // is not even default constructed unless explicitly constructed.
   {}
@@ -89,7 +93,7 @@ CILKTOOL_API void __csi_unit_init(const char* const file_name,
 CILKTOOL_API
 void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] func(fid=" << func_id << ", nsr="
       << prop.num_sync_reg << ")" << std::endl;
 #endif
@@ -99,7 +103,7 @@ CILKTOOL_API
 void __csi_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id,
                      const func_exit_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] func_exit(feid=" << func_exit_id
       << ", fid=" << func_id << ")" << std::endl;
 #endif
@@ -109,7 +113,7 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
                             const int32_t num_bytes, const load_prop_t prop) {
 return;
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] before_load(lid=" << load_id << ", addr="
       << addr << ", nb=" << num_bytes << ", align=" << prop.alignment
       << ", vtab=" << prop.is_vtable_access << ", const=" << prop.is_constant
@@ -124,7 +128,7 @@ CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
                            const int32_t num_bytes, const load_prop_t prop) {
 return;
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] after_load(lid=" << load_id << ", addr="
       << addr << ", nb=" << num_bytes << ", align=" << prop.alignment
       << ", vtab=" << prop.is_vtable_access << ", const=" << prop.is_constant
@@ -137,9 +141,8 @@ return;
 
 CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
                              const int32_t num_bytes, const store_prop_t prop) {
-  tool->stack.back().sw.insert((uint64_t)addr);
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] before_store(sid=" << store_id
       << ", addr=" << addr << ", nb=" << num_bytes << ", align="
       << prop.alignment << ", vtab=" << prop.is_vtable_access << ", const="
@@ -147,13 +150,14 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
+  tool->stack.register_write((uint64_t)addr);
 }
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
                             const int32_t num_bytes, const store_prop_t prop) {
 return;
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] after_store(sid=" << store_id
       << ", addr=" << addr << ", nb=" << num_bytes << ", align="
       << prop.alignment << ", vtab=" << prop.is_vtable_access << ", const="
@@ -165,9 +169,8 @@ return;
 
 CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
                              const task_prop_t prop) {
-  tool->stack.push();
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
@@ -177,34 +180,33 @@ CILKTOOL_API
 void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
                      const csi_id_t detach_id, const unsigned sync_reg,
                      const task_exit_prop_t prop) {
-  auto last = tool->stack.pop();
-  auto& back = tool->stack.back();
-  bool disjoint = is_disjoint(last.sw , back.pw);
-//  assert(disjoint && "Race condition!");
-  if (!disjoint)
-    tool->outs_red << "\n\nRACE CONDITION\n\n" << std::endl;;
-  
-  tool->outs_red << "back pw: " << back.pw << std::endl
-      << "last sw: " << last.sw << std::endl;
-
-  merge_into(back.pw, last.sw);
-
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] task_exit(teid=" << task_exit_id
       << ", tid=" << task_id << ", did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
+  auto last = tool->stack.pop();
+  auto& back = tool->stack.back();
+  bool disjoint = tool->stack.attach(last);
+//  assert(disjoint && "Race condition!");
+  if (!disjoint)
+    outs_red << "\n\nRACE CONDITION\n\n" << std::endl;;
+  
+  outs_red << "back pw: " << back.pw << std::endl
+      << "last sw: " << last.sw << std::endl;
+
 }
 
 CILKTOOL_API
 void __csi_detach(const csi_id_t detach_id, const unsigned sync_reg,
                   const detach_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] detach(did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
+  tool->stack.before_detach();
 }
 
 CILKTOOL_API
@@ -212,7 +214,7 @@ void __csi_detach_continue(const csi_id_t detach_continue_id,
                            const csi_id_t detach_id, const unsigned sync_reg,
                            const detach_continue_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] detach_continue(dcid="
       << detach_continue_id << ", did=" << detach_id << ", sr=" << sync_reg
       << ")" << std::endl;
@@ -222,7 +224,7 @@ void __csi_detach_continue(const csi_id_t detach_continue_id,
 CILKTOOL_API
 void __csi_before_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] before_sync(sid=" << sync_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
@@ -230,26 +232,24 @@ void __csi_before_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 
 CILKTOOL_API
 void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
-  auto& back = tool->stack.back();
-
-  tool->outs_red << "back pw: " << back.pw << std::endl
-      << "back sw: " << back.sw << std::endl;
-
-  merge_into(back.sw, back.pw);
-  back.pw.clear();
-
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
+  auto& back = tool->stack.back();
+
+  outs_red << "back pw: " << back.pw << std::endl
+      << "back sw: " << back.sw << std::endl;
+
+  tool->stack.enter_serial();
 }
 
 CILKTOOL_API
 void __csi_after_alloca(const csi_id_t alloca_id, const void *addr,
                              size_t num_bytes, const alloca_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] after_alloca(aid=" << alloca_id
       << ", addr=" << addr << ", nb=" << num_bytes << ", static="
       << prop.is_static << ")" << std::endl;
@@ -261,7 +261,7 @@ void __csi_before_allocfn(const csi_id_t allocfn_id, size_t size,
                                size_t num, size_t alignment,
                                const void *oldaddr, const allocfn_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] before_allocfn(afid=" << allocfn_id
       << ", size=" << size << ", num=" << num << ", align=" << alignment
       << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty << ")"
@@ -274,7 +274,7 @@ void __csi_after_allocfn(const csi_id_t allocfn_id, const void *addr,
                               size_t size, size_t num, size_t alignment,
                               const void *oldaddr, const allocfn_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] after_allocfn(afid=" << allocfn_id
       << ", addr=" << addr << ", size=" << size << ", num=" << num << ", align="
       << alignment << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty
@@ -286,7 +286,7 @@ CILKTOOL_API
 void __csi_before_free(const csi_id_t free_id, const void *ptr,
                             const free_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] before_free(fid=" << free_id
       << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
@@ -296,7 +296,7 @@ CILKTOOL_API
 void __csi_after_free(const csi_id_t free_id, const void *ptr,
                            const free_prop_t prop) {
 #ifdef TRACE_CALLS
-  tool->outs_red
+  outs_red
       << "[W" << worker_number() << "] after_free(fid=" << free_id
       << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif

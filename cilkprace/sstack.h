@@ -13,6 +13,7 @@ using set_t = std::unordered_set<uint64_t>;
 // Accesses are stored in the serial section
 // The Parallel section stores dead task's parallel writes
 struct shadow_stack_frame_t {
+  bool has_children = false;
   set_t sr;
   set_t sw;
   set_t pr;
@@ -78,6 +79,38 @@ public:
     return frames.back();
   }
 
+  // Dumps the parallel section of the current stack frame into the serial section
+  // and clears the has_children flag
+  // Intended to be used during a sync
+  void enter_serial() {
+    merge_into(back().sw, back().pw);
+    back().pw.clear();
+    back().has_children = false;
+  } 
+  
+  // Merges oth with the current stack frame as if they occurred in parallel.
+  // Returns true if the two stack frames are disjoint
+  bool attach(shadow_stack_frame_t& oth) {
+    bool disjoint = is_disjoint(oth.sw, back().pw);
+    merge_into(back().pw, oth.sw);
+
+    return disjoint;
+  }
+
+  // Declare that the current stack frame has children and create a stack frame for the child
+  void before_detach() {
+    back().has_children = true;
+    push();
+  }
+  
+  // Registers a write to the current frame
+  void register_write(uint64_t addr) {
+    if (back().has_children)
+      back().pw.insert(addr);    
+    else
+      back().sw.insert(addr);
+  }
+
   /// Reducer support
 
   static void identity(void *view) {
@@ -88,8 +121,10 @@ public:
     shadow_stack_t *left = static_cast<shadow_stack_t *>(left_view);
     shadow_stack_t *right = static_cast<shadow_stack_t *>(right_view);
 
+
 #if TRACE_CALLS
-    std::cerr << "Reducing " << std::endl;
+    auto wnum = __cilkrts_get_worker_number();
+    std::cerr << "[" << wnum << "] Reducing " << std::endl;
     std::cerr << "right->back().pw: " << right->back().pw << std::endl;
     std::cerr << "right->back().sw: " <<  right->back().sw << std::endl;
 #endif
