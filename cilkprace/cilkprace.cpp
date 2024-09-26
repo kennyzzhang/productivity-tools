@@ -187,11 +187,7 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
   bool disjoint = tool->stack.attach(last);
 //  assert(disjoint && "Race condition!");
   if (!disjoint)
-    outs_red << "\n\nRACE CONDITION\n\n" << std::endl;;
-  
-  outs_red << "back pw: " << back.pw << std::endl
-      << "last sw: " << last.sw << std::endl;
-
+    outs_red << "\n\nRACE CONDITION TASK EXIT\n\n" << std::endl;;
 }
 
 CILKTOOL_API
@@ -202,7 +198,7 @@ void __csi_detach(const csi_id_t detach_id, const unsigned sync_reg,
       << "[W" << worker_number() << "] detach(did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  tool->stack.before_detach();
+  tool->stack.before_detach(sync_reg);
 }
 
 CILKTOOL_API
@@ -213,8 +209,11 @@ void __csi_detach_continue(const csi_id_t detach_continue_id,
   outs_red
       << "[W" << worker_number() << "] detach_continue(dcid="
       << detach_continue_id << ", did=" << detach_id << ", sr=" << sync_reg
-      << ")" << std::endl;
+      << ", unwind=" << prop.is_unwind << ")" << std::endl;
 #endif
+  // If we detach_continue and the current stack frame spawned a child, we should pretend we're a thread
+  //if (tool->stack.back().has_children)
+  //  tool->stack.before_detach();
 }
 
 CILKTOOL_API
@@ -235,10 +234,9 @@ void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 #endif
   auto& back = tool->stack.back();
 
-  outs_red << "back pw: " << back.pw << std::endl
-      << "back sw: " << back.sw << std::endl;
-
-  tool->stack.enter_serial();
+  bool disjoint = tool->stack.enter_serial(sync_reg);
+  if (!disjoint)
+    outs_red << "\n\nRACE CONDITION DURING SYNC\n\n" << std::endl;;
 }
 
 CILKTOOL_API

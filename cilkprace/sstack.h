@@ -14,12 +14,15 @@ using set_t = std::unordered_set<uint64_t>;
 // Type for a shadow stack frame
 // Accesses are stored in the serial section
 // The Parallel section stores dead task's parallel writes
+// That is, accesses to parallel section count as races
 struct shadow_stack_frame_t {
-  bool has_children = false;
+  unsigned sync_reg = 0;
   set_t sr;
   set_t sw;
   set_t pr;
   set_t pw;
+
+  shadow_stack_frame_t(const unsigned sr) : sync_reg(sr) {};
 };
 
 std::ostream& operator<<(std::ostream& os, set_t s) {
@@ -62,7 +65,8 @@ private:
   std::vector<shadow_stack_frame_t> frames;
 
 public:
-  shadow_stack_t() : frames(1) {
+  shadow_stack_t() {
+    push(-1);
   }
   ~shadow_stack_t() {
     assert(frames.size() <= 1 && "Shadow stack destructed with information!");
@@ -71,8 +75,8 @@ public:
   shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames) {
   }
 
-  shadow_stack_frame_t push() {
-    frames.emplace_back();
+  shadow_stack_frame_t push(const unsigned sr) {
+    frames.emplace_back(sr);
     return frames.back();
   }
 
@@ -89,15 +93,32 @@ public:
   }
 
   // Dumps the parallel section of the current stack frame into the serial section
-  // and clears the has_children flag
   // Intended to be used during a sync
-  void enter_serial() {
+  bool enter_serial(const unsigned sr) {
 #ifdef TRACE_CALLS
     outs_red << "enter_serial" << std::endl;
 #endif
+    bool all_disjoint = true;
+
+    // Recall that there's an extra stack frame for us to use
+    // That is, for 2 tasks, we spawn 3 stack frames
+    // The bottommost stack frame is the detach_continue into the spawning work
+    // We have to attach this extra one
+
+    while(back().sync_reg == sr)
+    {
+#ifdef TRACE_CALLS
+      outs_red << "collapsing stack sr=" << sr << std::endl;
+#endif
+      auto last = pop();
+      all_disjoint &= attach(last);
+    }
+
+    // back() sees these as just accesses. It's irrelevant how they could have happened within back()
+    // That is, everything eventually has to go to back().sw
     merge_into(back().sw, back().pw);
     back().pw.clear();
-    back().has_children = false;
+    return all_disjoint;
   } 
   
   // Merges oth with the current stack frame as if they occurred in parallel.
@@ -106,30 +127,44 @@ public:
 #ifdef TRACE_CALLS
     outs_red << "attach" << std::endl;
 #endif
-    bool disjoint = is_disjoint(oth.sw, back().pw);
+    // The other stack contains its accesses in the serial set
+    // and parallel access it knows about (and may race with!) in its parallel set
+    // We therefore have to check it against itself, as well as it's pw against what we know as pw
+    // We can worry about checking for races against our accesses when we attach
+    bool disjoint = is_disjoint(back().pw, oth.sw) && is_disjoint(back().pw, oth.pw) && is_disjoint(oth.pw, oth.sw);
+
+    // We have to merge both sw and pw into our pw
+    // As sw are freshly learned of and pw cannot be forgotten by us
+    // We could do this before, but then we lose *some* info about where the race is 
     merge_into(back().pw, oth.sw);
+    merge_into(back().pw, oth.pw);
 
     return disjoint;
   }
 
   // Declare that the current stack frame has children and create a stack frame for the child
-  void before_detach() {
+  void before_detach(const unsigned sr) {
 #ifdef TRACE_CALLS
     outs_red << "before_detach" << std::endl;
 #endif
-    back().has_children = true;
-    push();
+    // This stack exists to represent the spawning thread's "task"
+    // We'll have to take care to destroy an extra during the sync 
+    if (back().sync_reg != sr)
+    {
+#ifdef TRACE_CALLS
+      outs_red << "spawning extra stack for spawning thread" << std::endl;
+#endif
+      push(sr); 
+    }
+    push(sr);
   }
   
   // Registers a write to the current frame
   void register_write(uint64_t addr) {
 #ifdef TRACE_CALLS
-    outs_red << "register_write on " << addr << std::endl;
+    outs_red << "register_write on " << (void*)addr << std::endl;
 #endif
-    if (back().has_children)
-      back().pw.insert(addr);    
-    else
-      back().sw.insert(addr);
+    back().sw.insert(addr);
   }
 
   /// Reducer support
