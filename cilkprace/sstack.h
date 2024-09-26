@@ -105,7 +105,7 @@ public:
     // The bottommost stack frame is the detach_continue into the spawning work
     // We have to attach this extra one
 
-    while(back().sync_reg == sr)
+    if(back().sync_reg == sr)
     {
 #ifdef TRACE_CALLS
       outs_red << "collapsing stack sr=" << sr << std::endl;
