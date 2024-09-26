@@ -198,7 +198,7 @@ void __csi_detach(const csi_id_t detach_id, const unsigned sync_reg,
       << "[W" << worker_number() << "] detach(did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  tool->stack.before_detach(sync_reg);
+  tool->stack.before_detach();
 }
 
 CILKTOOL_API
@@ -234,7 +234,7 @@ void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 #endif
   auto& back = tool->stack.back();
 
-  bool disjoint = tool->stack.enter_serial(sync_reg);
+  bool disjoint = tool->stack.enter_serial();
   if (!disjoint)
     outs_red << "\n\nRACE CONDITION DURING SYNC\n\n" << std::endl;;
 }

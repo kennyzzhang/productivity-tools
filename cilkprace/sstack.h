@@ -16,13 +16,11 @@ using set_t = std::unordered_set<uint64_t>;
 // The Parallel section stores dead task's parallel writes
 // That is, accesses to parallel section count as races
 struct shadow_stack_frame_t {
-  unsigned sync_reg = 0;
+  bool is_facade = false;
   set_t sr;
   set_t sw;
   set_t pr;
   set_t pw;
-
-  shadow_stack_frame_t(const unsigned sr) : sync_reg(sr) {};
 };
 
 std::ostream& operator<<(std::ostream& os, set_t s) {
@@ -65,8 +63,7 @@ private:
   std::vector<shadow_stack_frame_t> frames;
 
 public:
-  shadow_stack_t() {
-    push(-1);
+  shadow_stack_t() : frames(1) {
   }
   ~shadow_stack_t() {
     assert(frames.size() <= 1 && "Shadow stack destructed with information!");
@@ -75,8 +72,8 @@ public:
   shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames) {
   }
 
-  shadow_stack_frame_t push(const unsigned sr) {
-    frames.emplace_back(sr);
+  shadow_stack_frame_t push() {
+    frames.emplace_back();
     return frames.back();
   }
 
@@ -94,7 +91,7 @@ public:
 
   // Dumps the parallel section of the current stack frame into the serial section
   // Intended to be used during a sync
-  bool enter_serial(const unsigned sr) {
+  bool enter_serial() {
 #ifdef TRACE_CALLS
     outs_red << "enter_serial" << std::endl;
 #endif
@@ -105,10 +102,10 @@ public:
     // The bottommost stack frame is the detach_continue into the spawning work
     // We have to attach this extra one
 
-    if(back().sync_reg == sr)
+    if(back().is_facade)
     {
 #ifdef TRACE_CALLS
-      outs_red << "collapsing stack sr=" << sr << std::endl;
+      outs_red << "collapsing facade" << std::endl;
 #endif
       auto last = pop();
       all_disjoint &= attach(last);
@@ -143,20 +140,21 @@ public:
   }
 
   // Declare that the current stack frame has children and create a stack frame for the child
-  void before_detach(const unsigned sr) {
+  void before_detach() {
 #ifdef TRACE_CALLS
     outs_red << "before_detach" << std::endl;
 #endif
     // This stack exists to represent the spawning thread's "task"
-    // We'll have to take care to destroy an extra during the sync 
-    if (back().sync_reg != sr)
+    // We'll have to take care to destroy an extra during the sync/exit 
+    if (!back().is_facade)
     {
 #ifdef TRACE_CALLS
       outs_red << "spawning extra stack for spawning thread" << std::endl;
 #endif
-      push(sr); 
+      push(); 
+      back().is_facade = true;
     }
-    push(sr);
+    push();
   }
   
   // Registers a write to the current frame
