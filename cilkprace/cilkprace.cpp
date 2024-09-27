@@ -170,6 +170,7 @@ CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
+  tool->stack.before_detach();
 }
 
 CILKTOOL_API
@@ -182,12 +183,15 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
       << ", tid=" << task_id << ", did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  auto last = tool->stack.pop();
-  auto& back = tool->stack.back();
-  bool disjoint = tool->stack.attach(last);
+  // We spawn 2 stacks on every fork
+  // Attach the 2 stacks to 1 as if they occured in parallel.
+  bool disjoint = tool->stack.join();
 //  assert(disjoint && "Race condition!");
   if (!disjoint)
     outs_red << "\n\nRACE CONDITION TASK EXIT\n\n" << std::endl;;
+
+  // Current state: +1 stack representing the spawner. We want to serialize it eventually
+  // But can't until a sync
 }
 
 CILKTOOL_API
@@ -198,7 +202,6 @@ void __csi_detach(const csi_id_t detach_id, const unsigned sync_reg,
       << "[W" << worker_number() << "] detach(did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  tool->stack.before_detach();
 }
 
 CILKTOOL_API

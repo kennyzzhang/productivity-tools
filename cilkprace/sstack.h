@@ -16,7 +16,7 @@ using set_t = std::unordered_set<uint64_t>;
 // The Parallel section stores dead task's parallel writes
 // That is, accesses to parallel section count as races
 struct shadow_stack_frame_t {
-  bool is_facade = false;
+  bool zombie = false;
   set_t sr;
   set_t sw;
   set_t pr;
@@ -97,18 +97,12 @@ public:
 #endif
     bool all_disjoint = true;
 
-    // Recall that there's an extra stack frame for us to use
-    // That is, for 2 tasks, we spawn 3 stack frames
-    // The bottommost stack frame is the detach_continue into the spawning work
-    // We have to attach this extra one
-
-    if(back().is_facade)
+    // The state of the stack at this point is a bit funky
+    // We know (single-threaded) that all forks have joined
+    while(back().zombie)
     {
-#ifdef TRACE_CALLS
-      outs_red << "collapsing facade" << std::endl;
-#endif
       auto last = pop();
-      all_disjoint &= attach(last);
+      all_disjoint &= join(last);
     }
 
     // back() sees these as just accesses. It's irrelevant how they could have happened within back()
@@ -120,14 +114,17 @@ public:
   
   // Merges oth with the current stack frame as if they occurred in parallel.
   // Returns true if the two stack frames are disjoint
-  bool attach(shadow_stack_frame_t& oth) {
+  bool join() {
 #ifdef TRACE_CALLS
-    outs_red << "attach" << std::endl;
+    outs_red << "join" << std::endl;
 #endif
+    // Grab that fork's frame
+    auto oth = pop();
+
     // The other stack contains its accesses in the serial set
     // and parallel access it knows about (and may race with!) in its parallel set
     // We therefore have to check it against itself, as well as it's pw against what we know as pw
-    // We can worry about checking for races against our accesses when we attach
+    // We can worry about checking for races against our accesses when we join
     bool disjoint = is_disjoint(back().pw, oth.sw) && is_disjoint(back().pw, oth.pw) && is_disjoint(oth.pw, oth.sw);
 
     // We have to merge both sw and pw into our pw
@@ -135,6 +132,10 @@ public:
     // We could do this before, but then we lose *some* info about where the race is 
     merge_into(back().pw, oth.sw);
     merge_into(back().pw, oth.pw);
+    
+    // We can't destroy the spawner's stack yet.
+    // There still could be a race
+    back().zombie = true;
 
     return disjoint;
   }
@@ -144,17 +145,10 @@ public:
 #ifdef TRACE_CALLS
     outs_red << "before_detach" << std::endl;
 #endif
-    // This stack exists to represent the spawning thread's "task"
-    // We'll have to take care to destroy an extra during the sync/exit 
-    if (!back().is_facade)
-    {
-#ifdef TRACE_CALLS
-      outs_red << "spawning extra stack for spawning thread" << std::endl;
-#endif
-      push(); 
-      back().is_facade = true;
-    }
+    // We actually spawn 2 things there!
+    // Cilk uses a binary forking model. We represent each prong as a stack
     push();
+    push(); 
   }
   
   // Registers a write to the current frame
