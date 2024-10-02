@@ -170,7 +170,7 @@ CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
-  tool->stack.before_detach();
+  tool->stack.add_task_frame();
 }
 
 CILKTOOL_API
@@ -183,15 +183,12 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
       << ", tid=" << task_id << ", did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  // We spawn 2 stacks on every fork
-  // Attach the 2 stacks to 1 as if they occured in parallel.
+  // Attach stack as if they occured in parallel.
   bool disjoint = tool->stack.join();
 //  assert(disjoint && "Race condition!");
   if (!disjoint)
     outs_red << "\n\nRACE CONDITION TASK EXIT\n\n" << std::endl;;
 
-  // Current state: +1 stack representing the spawner. We want to serialize it eventually
-  // But can't until a sync
 }
 
 CILKTOOL_API
@@ -214,9 +211,7 @@ void __csi_detach_continue(const csi_id_t detach_continue_id,
       << detach_continue_id << ", did=" << detach_id << ", sr=" << sync_reg
       << ", unwind=" << prop.is_unwind << ")" << std::endl;
 #endif
-  // If we detach_continue and the current stack frame spawned a child, we should pretend we're a thread
-  //if (tool->stack.back().has_children)
-  //  tool->stack.before_detach();
+  tool->stack.add_continue_frame();
 }
 
 CILKTOOL_API
@@ -235,8 +230,6 @@ void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  auto& back = tool->stack.back();
-
   bool disjoint = tool->stack.enter_serial();
   if (!disjoint)
     outs_red << "\n\nRACE CONDITION DURING SYNC\n\n" << std::endl;;

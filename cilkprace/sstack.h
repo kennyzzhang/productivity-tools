@@ -12,11 +12,10 @@
 using set_t = std::unordered_set<uint64_t>;
 
 // Type for a shadow stack frame
-// Accesses are stored in the serial section
-// The Parallel section stores dead task's parallel writes
-// That is, accesses to parallel section count as races
+// A frame represents serial work followed by parallel work
+// serial vs parlalel determines whether or not disjointness checks are made
 struct shadow_stack_frame_t {
-  bool zombie = false;
+  bool is_continue = false;
   set_t sr;
   set_t sw;
   set_t pr;
@@ -99,14 +98,20 @@ public:
 
     // The state of the stack at this point is a bit funky
     // We know (single-threaded) that all forks have joined
-    while(back().zombie)
+    while(back().is_continue)
     {
-      auto last = pop();
-      all_disjoint &= join(last);
-    }
+      auto oth = pop();
+      // The other stack contains its accesses in the serial set and parallel set
+      // Now it's only serial set
+      merge_into(oth.sw, oth.pw);
 
-    // back() sees these as just accesses. It's irrelevant how they could have happened within back()
-    // That is, everything eventually has to go to back().sw
+      // Check if there's a race 
+      all_disjoint &= is_disjoint(back().pw, oth.sw);
+
+      merge_into(back().pw, oth.sw);
+    }
+  
+    // Merge these tasks into serial
     merge_into(back().sw, back().pw);
     back().pw.clear();
     return all_disjoint;
@@ -120,35 +125,36 @@ public:
 #endif
     // Grab that fork's frame
     auto oth = pop();
+    assert(oth.is_continue == false && "Expected task frame in join!");
 
-    // The other stack contains its accesses in the serial set
-    // and parallel access it knows about (and may race with!) in its parallel set
-    // We therefore have to check it against itself, as well as it's pw against what we know as pw
-    // We can worry about checking for races against our accesses when we join
-    bool disjoint = is_disjoint(back().pw, oth.sw) && is_disjoint(back().pw, oth.pw) && is_disjoint(oth.pw, oth.sw);
+    // The other stack contains its accesses in the serial set and parallel set
+    // Now it's only serial set
+    merge_into(oth.sw, oth.pw);
 
-    // We have to merge both sw and pw into our pw
-    // As sw are freshly learned of and pw cannot be forgotten by us
-    // We could do this before, but then we lose *some* info about where the race is 
+    // Check if there's a race 
+    bool disjoint = is_disjoint(back().pw, oth.sw);
+
+    // We have to store those writes 
     merge_into(back().pw, oth.sw);
-    merge_into(back().pw, oth.pw);
     
-    // We can't destroy the spawner's stack yet.
-    // There still could be a race
-    back().zombie = true;
-
     return disjoint;
   }
 
   // Declare that the current stack frame has children and create a stack frame for the child
-  void before_detach() {
+  void add_task_frame() {
 #ifdef TRACE_CALLS
-    outs_red << "before_detach" << std::endl;
+    outs_red << "add_task_frame" << std::endl;
 #endif
-    // We actually spawn 2 things there!
-    // Cilk uses a binary forking model. We represent each prong as a stack
-    push();
     push(); 
+    back().is_continue = false;
+  }
+    
+  void add_continue_frame() {
+#ifdef TRACE_CALLS
+    outs_red << "add_continue_frame" << std::endl;
+#endif
+    push(); 
+    back().is_continue = true;
   }
   
   // Registers a write to the current frame
