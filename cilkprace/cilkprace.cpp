@@ -22,10 +22,10 @@ cilk::ostream_reducer<char> outs_red([]() -> std::basic_ostream<char>& {
 
 class CilkgraphImpl_t {
 public:
-  shadow_stack_reducer stack;
   //shadow_stack_t stack;
 
 private:
+  shadow_stack_reducer stack;
   // Need to manually register reducer
   //
   // > warning: reducer callbacks not implemented for structure members
@@ -67,10 +67,33 @@ public:
 
   ~CilkgraphImpl_t() {}
 
+  void register_write(uint64_t addr) {
+    stack.register_write(addr);
+  }
+  void add_task_frame() {
+    stack.add_task_frame();
+  }
+  void add_continue_frame() {
+    stack.add_continue_frame();
+  }
+  void enter_serial() {
+    set_t collisions;
+    stack.enter_serial(collisions);
+    if (!collisions.empty())
+      outs_red << "\nRACE CONDITION DURING SYNC" << std::endl << "on " << collisions << std::endl << std::endl;
+    //TODO: Figure out what the race was
+  }
+  void join() {
+    set_t collisions;
+    stack.join(collisions);
+    if (!collisions.empty())
+      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl << "on " << collisions << std::endl << std::endl;
+  }
+
 };
 
 static std::unique_ptr<CilkgraphImpl_t> tool =
-    std::make_unique<decltype(tool)::element_type>();
+std::make_unique<decltype(tool)::element_type>();
 
 static unsigned worker_number() {
 #pragma clang diagnostic push
@@ -146,7 +169,7 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  tool->stack.register_write((uint64_t)addr);
+  tool->register_write((uint64_t)addr);
 }
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
@@ -170,7 +193,7 @@ CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
-  tool->stack.add_task_frame();
+  tool->add_task_frame();
 }
 
 CILKTOOL_API
@@ -184,10 +207,8 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
       << sync_reg << ")" << std::endl;
 #endif
   // Attach stack as if they occured in parallel.
-  bool disjoint = tool->stack.join();
+    tool->join();
 //  assert(disjoint && "Race condition!");
-  if (!disjoint)
-    outs_red << "\n\nRACE CONDITION TASK EXIT\n\n" << std::endl;;
 
 }
 
@@ -211,7 +232,7 @@ void __csi_detach_continue(const csi_id_t detach_continue_id,
       << detach_continue_id << ", did=" << detach_id << ", sr=" << sync_reg
       << ", unwind=" << prop.is_unwind << ")" << std::endl;
 #endif
-  tool->stack.add_continue_frame();
+  tool->add_continue_frame();
 }
 
 CILKTOOL_API
@@ -230,9 +251,7 @@ void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  bool disjoint = tool->stack.enter_serial();
-  if (!disjoint)
-    outs_red << "\n\nRACE CONDITION DURING SYNC\n\n" << std::endl;;
+  tool->enter_serial();
 }
 
 CILKTOOL_API

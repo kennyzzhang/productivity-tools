@@ -2,6 +2,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <algorithm>
 #include <vector>
 #include <cassert>
 #include <iostream>
@@ -28,17 +29,17 @@ std::ostream& operator<<(std::ostream& os, set_t s) {
   return os;
 }
 
-bool is_disjoint(set_t& small, set_t& large)
+bool is_disjoint(set_t& small, set_t& large, set_t& intersect)
 {
   #ifdef TRACE_CALLS
   outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
   #endif
   if (small.size() > large.size()) // Small into large merging
-    return is_disjoint(large, small);
+    return is_disjoint(large, small, intersect);
   for (auto access : small)
     if (large.count(access))
-      return false;
-  return true;
+      intersect.insert(access);
+  return intersect.empty();
 }
 
 //Merges the second argument into the first. Potentially modifies the second argument
@@ -90,14 +91,13 @@ public:
 
   // Dumps the parallel section of the current stack frame into the serial section
   // Intended to be used during a sync
-  bool enter_serial() {
+  bool enter_serial(set_t& collisions) {
 #ifdef TRACE_CALLS
     outs_red << "enter_serial" << std::endl;
 #endif
-    bool all_disjoint = true;
 
     // The state of the stack at this point is a bit funky
-    // We know (single-threaded) that all forks have joined
+    // We know that all forks have joined
     while(back().is_continue)
     {
       auto oth = pop();
@@ -106,20 +106,20 @@ public:
       merge_into(oth.sw, oth.pw);
 
       // Check if there's a race 
-      all_disjoint &= is_disjoint(back().pw, oth.sw);
-
+      is_disjoint(back().pw, oth.sw, collisions);
+        
       merge_into(back().pw, oth.sw);
     }
   
     // Merge these tasks into serial
     merge_into(back().sw, back().pw);
     back().pw.clear();
-    return all_disjoint;
+    return collisions.empty();
   } 
   
   // Merges oth with the current stack frame as if they occurred in parallel.
   // Returns true if the two stack frames are disjoint
-  bool join() {
+  bool join(set_t& collisions) {
 #ifdef TRACE_CALLS
     outs_red << "join" << std::endl;
 #endif
@@ -132,12 +132,12 @@ public:
     merge_into(oth.sw, oth.pw);
 
     // Check if there's a race 
-    bool disjoint = is_disjoint(back().pw, oth.sw);
+    is_disjoint(back().pw, oth.sw, collisions);
 
     // We have to store those writes 
     merge_into(back().pw, oth.sw);
     
-    return disjoint;
+    return collisions.empty();
   }
 
   // Declare that the current stack frame has children and create a stack frame for the child
@@ -195,7 +195,8 @@ public:
     right->back().pw.clear();
   
     // Soft Task Exit
-    bool disjoint = is_disjoint(left->back().pw, right->back().sw);
+    set_t intersect;
+    bool disjoint = is_disjoint(left->back().pw, right->back().sw, intersect);
     if (!disjoint) 
     {
       std::cerr << "\n\nRACE CONDITION (reducer)" << std::endl;
