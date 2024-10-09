@@ -63,7 +63,7 @@ private:
   std::vector<shadow_stack_frame_t> frames;
 
 public:
-  shadow_stack_t() : frames(1) {
+  shadow_stack_t(const int num=1) : frames(num) {
   }
   ~shadow_stack_t() {
     assert(frames.size() <= 1 && "Shadow stack destructed with information!");
@@ -93,12 +93,12 @@ public:
   // Intended to be used during a sync
   bool enter_serial(set_t& collisions) {
 #ifdef TRACE_CALLS
-    outs_red << "enter_serial" << std::endl;
+    outs_red << "enter_serial with " << frames.size() << " frames!" << std::endl;
 #endif
 
     // The state of the stack at this point is a bit funky
     // We know that all forks have joined
-    while(back().is_continue)
+    while(frames.size() >= 2 && back().is_continue)
     {
       auto oth = pop();
       // The other stack contains its accesses in the serial set and parallel set
@@ -164,11 +164,29 @@ public:
 #endif
     back().sw.insert(addr);
   }
-
+  
   /// Reducer support
+  void append_stack(shadow_stack_t& oth) {
+#if TRACE_CALLS
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    auto wnum = __cilkrts_get_worker_number();
+    #pragma clang diagnostic pop
+    std::cerr << "[" << wnum << "] Append Stack" << std::endl;
+#endif
+    frames.insert(frames.end(), oth.frames.begin(), oth.frames.end());
+  }
 
   static void identity(void *view) {
-    new (view) shadow_stack_t();
+#if TRACE_CALLS
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    auto wnum = __cilkrts_get_worker_number();
+    #pragma clang diagnostic pop
+    std::cerr << "[" << wnum << "] Identity" << std::endl;
+#endif
+
+    new (view) shadow_stack_t(0);
   }
 
   static void reduce(void *left_view, void *right_view) {
@@ -177,35 +195,19 @@ public:
 
 
 #if TRACE_CALLS
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     auto wnum = __cilkrts_get_worker_number();
+    #pragma clang diagnostic pop
     std::cerr << "[" << wnum << "] Reducing " << std::endl;
-    std::cerr << "right->back().pw: " << right->back().pw << std::endl;
-    std::cerr << "right->back().sw: " <<  right->back().sw << std::endl;
+    std::cerr << "left->frames.size(): " << left->frames.size() << std::endl;
+    std::cerr << "right->frames.size(): " << right->frames.size() << std::endl;
+    //std::cerr << "right->back().pw: " << right->back().pw << std::endl;
+    //std::cerr << "right->back().sw: " <<  right->back().sw << std::endl;
 #endif
-    assert(1 == right->frames.size());
+    assert(right && "Reducer given NULL pointer????");
+    left->append_stack(*right);
 
-    //Invariant: steals and reducing shouldn't change the stack's state at the end    
-    // OR what checks are done for races
-    // This is like a sync
-    // BUT it means that task exits have used incomplete information
-    // So it's like a soft task exit
-  
-    // Pretend this is a sync
-    merge_into(right->back().sw, right->back().pw);
-    right->back().pw.clear();
-  
-    // Soft Task Exit
-    set_t intersect;
-    bool disjoint = is_disjoint(left->back().pw, right->back().sw, intersect);
-    if (!disjoint) 
-    {
-      std::cerr << "\n\nRACE CONDITION (reducer)" << std::endl;
-      std::cerr << "left->back().pw: " << left->back().pw << std::endl;
-      std::cerr << "right->back().sw: " <<  right->back().sw << std::endl;
-      std::cerr << "RACE CONDITION (reducer)\n\n" << std::endl;
-    }
-
-    merge_into(left->back().pw, right->back().sw);
     right->~shadow_stack_t();
   }
 };

@@ -13,13 +13,14 @@
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
 
 std::unique_ptr<std::ofstream> outf;
+#ifndef OUTS_CERR
 cilk::ostream_reducer<char> outs_red([]() -> std::basic_ostream<char>& {
             const char* envstr = getenv("CILKSCALE_OUT");
             if (envstr)
             return *(outf = std::make_unique<std::ofstream>(envstr));
             return std::cout;
             }());
-
+#endif
 class CilkgraphImpl_t {
 public:
   //shadow_stack_t stack;
@@ -47,13 +48,17 @@ private:
       CilkgraphImpl_t& this_;
 
       RAII(decltype(this_) this_) : this_(this_) {
+#ifndef OUTS_CERR
         reducer_register(outs_red);
+#endif
         reducer_register(this_.stack);
         const char* envstr = getenv("CILKSCALE_OUT");
       }
 
       ~RAII() {
+#ifndef OUTS_CERR
         reducer_unregister(outs_red);
+#endif
         reducer_unregister(this_.stack);
       }
     } raii;
@@ -81,7 +86,6 @@ public:
     stack.enter_serial(collisions);
     if (!collisions.empty())
       outs_red << "\nRACE CONDITION DURING SYNC" << std::endl << "on " << collisions << std::endl << std::endl;
-    //TODO: Figure out what the race was
   }
   void join() {
     set_t collisions;
