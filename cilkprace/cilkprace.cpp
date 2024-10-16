@@ -120,6 +120,8 @@ void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
       << "[W" << worker_number() << "] func(fid=" << func_id << ", nsr="
       << prop.num_sync_reg << ")" << std::endl;
 #endif
+  auto entry = __csi_get_func_source_loc(func_id);
+  outs_red << "FUNC: " << entry->name << std::endl;
 }
 
 CILKTOOL_API
@@ -174,6 +176,8 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
   tool->register_write((uint64_t)addr);
+  auto store = __csi_get_store_source_loc(store_id);
+  outs_red << "WRITE ON " << store->name << std::endl;
 }
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
