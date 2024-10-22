@@ -322,13 +322,13 @@ void __csirt_unit_init(const char *const name,
     add_fed_table((fed_type_t)i, unit_fed_tables[i].num_entries,
                   unit_fed_tables[i].entries);
 
-    //std::printf("NUM ENTRIES %ld TYPE %ld\n", unit_fed_tables[i].num_entries, i);
+    std::printf("NUM ENTRIES %ld TYPE %ld\n", unit_fed_tables[i].num_entries, i);
     for (int j = 0; j < unit_fed_tables[i].num_entries; j++)
     {
       auto& entry = unit_fed_tables[i].entries[j];
-      //std::printf("%s: (%d, %d)\n", entry.name, entry.line_number, entry.column_number);
+      std::printf("%s: (%d, %d)\n", entry.name, entry.line_number, entry.column_number);
     }
-    //std::printf("\n");
+    std::printf("\n");
 
     update_ids((fed_type_t)i, unit_fed_tables[i].num_entries,
                unit_fed_tables[i].id_base);

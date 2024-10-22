@@ -72,8 +72,8 @@ public:
 
   ~CilkgraphImpl_t() {}
 
-  void register_write(uint64_t addr) {
-    stack.register_write(addr);
+  void register_write(uint64_t addr, source_loc_t store) {
+    stack.register_write(addr, store);
   }
   void add_task_frame() {
     stack.add_task_frame();
@@ -82,16 +82,16 @@ public:
     stack.add_continue_frame();
   }
   void enter_serial() {
-    set_t collisions;
+    multimap_t collisions;
     stack.enter_serial(collisions);
     if (!collisions.empty())
-      outs_red << "\nRACE CONDITION DURING SYNC" << std::endl << "on " << collisions << std::endl << std::endl;
+      outs_red << "\nRACE CONDITION DURING SYNC" << std::endl << collisions << std::endl << std::endl;
   }
   void join() {
-    set_t collisions;
+    multimap_t collisions;
     stack.join(collisions);
     if (!collisions.empty())
-      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl << "on " << collisions << std::endl << std::endl;
+      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl << collisions << std::endl << std::endl;
   }
 
 };
@@ -175,9 +175,9 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  tool->register_write((uint64_t)addr);
   auto store = __csi_get_store_source_loc(store_id);
-  outs_red << "WRITE ON " << store->name << std::endl;
+  tool->register_write((uint64_t)addr, *store);
+  outs_red << "WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 }
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,

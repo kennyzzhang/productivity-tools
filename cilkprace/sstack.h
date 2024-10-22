@@ -2,6 +2,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <map>
 #include <algorithm>
 #include <vector>
 #include <cassert>
@@ -11,16 +12,18 @@
 #include "outs_red.h"
 
 using set_t = std::unordered_set<uint64_t>;
+using map_t = std::unordered_map<uint64_t, source_loc_t>;
+using multimap_t = std::unordered_multimap<uint64_t, source_loc_t>;
 
 // Type for a shadow stack frame
 // A frame represents serial work followed by parallel work
 // serial vs parlalel determines whether or not disjointness checks are made
 struct shadow_stack_frame_t {
   bool is_continue = false;
-  set_t sr;
-  set_t sw;
-  set_t pr;
-  set_t pw;
+  map_t sr;
+  map_t sw;
+  map_t pr;
+  map_t pw;
 };
 
 std::ostream& operator<<(std::ostream& os, set_t s) {
@@ -29,7 +32,29 @@ std::ostream& operator<<(std::ostream& os, set_t s) {
   return os;
 }
 
-bool is_disjoint(set_t& small, set_t& large, set_t& intersect)
+std::ostream& operator<<(std::ostream& os, source_loc_t s) {
+  os << "(" << s.name << ", " << s.line_number<< ")";
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, map_t s) {
+  for (auto it : s)
+    os << (void*)it.first << ", ";
+  return os;
+}
+std::ostream& operator<<(std::ostream& os, multimap_t s) {
+  for (auto it = s.begin(); it != s.end();)
+  {
+    auto current = it->first; 
+    os << (void*) it->first << ": " << it->second;
+    while((++it) != s.end() && it->first == current)
+      os << ", " << it->second;
+    os << std::endl;
+  }
+  return os;
+}
+
+bool is_disjoint(map_t& small, map_t& large, multimap_t& intersect)
 {
   #ifdef TRACE_CALLS
   outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
@@ -37,13 +62,17 @@ bool is_disjoint(set_t& small, set_t& large, set_t& intersect)
   if (small.size() > large.size()) // Small into large merging
     return is_disjoint(large, small, intersect);
   for (auto access : small)
-    if (large.count(access))
-      intersect.insert(access);
+    if (large.count(access.first))
+    {
+      auto other_access = large.find(access.first);
+      intersect.emplace(access.first, access.second);
+      intersect.emplace(other_access->first, other_access->second);
+    }
   return intersect.empty();
 }
 
 //Merges the second argument into the first. Potentially modifies the second argument
-void merge_into(set_t& large, set_t& small) 
+void merge_into(map_t& large, map_t& small) 
 {
   if (small.size() > large.size()) // Small into large merging
     std::swap(small, large);
@@ -53,7 +82,8 @@ void merge_into(set_t& large, set_t& small)
   #endif
   
   for (auto access : small)
-    large.insert(access);
+    large[access.first] = access.second;
+    //large.insert(access);
 }
 
 // Type for a shadow stack
@@ -91,7 +121,7 @@ public:
 
   // Dumps the parallel section of the current stack frame into the serial section
   // Intended to be used during a sync
-  bool enter_serial(set_t& collisions) {
+  bool enter_serial(multimap_t& collisions) {
 #ifdef TRACE_CALLS
     outs_red << "enter_serial with " << frames.size() << " frames!" << std::endl;
 #endif
@@ -119,7 +149,7 @@ public:
   
   // Merges oth with the current stack frame as if they occurred in parallel.
   // Returns true if the two stack frames are disjoint
-  bool join(set_t& collisions) {
+  bool join(multimap_t& collisions) {
 #ifdef TRACE_CALLS
     outs_red << "join" << std::endl;
 #endif
@@ -158,11 +188,11 @@ public:
   }
   
   // Registers a write to the current frame
-  void register_write(uint64_t addr) {
+  void register_write(uint64_t addr, source_loc_t store) {
 #ifdef TRACE_CALLS
     outs_red << "register_write on " << (void*)addr << std::endl;
 #endif
-    back().sw.insert(addr);
+    back().sw[addr] = store;
   }
   
   /// Reducer support
