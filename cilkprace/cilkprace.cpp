@@ -122,6 +122,9 @@ void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
 #endif
   auto entry = __csi_get_func_source_loc(func_id);
   outs_red << "FUNC: " << entry->name << std::endl;
+  // TODO: if we ever get better task hooks, this (and the corresponding call
+  // in func_exit) can be removed
+  tool->add_task_frame();
 }
 
 CILKTOOL_API
@@ -132,6 +135,9 @@ void __csi_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id,
       << "[W" << worker_number() << "] func_exit(feid=" << func_exit_id
       << ", fid=" << func_id << ")" << std::endl;
 #endif
+  // TODO: if we ever get better task hooks, this (and the corresponding call
+  // in func_entry) can be removed
+  tool->join();
 }
 
 CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
