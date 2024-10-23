@@ -57,7 +57,7 @@ std::ostream& operator<<(std::ostream& os, multimap_t s) {
 bool is_disjoint(map_t& small, map_t& large, multimap_t& intersect)
 {
   #ifdef TRACE_CALLS
-  outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
+  //outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
   #endif
   if (small.size() > large.size()) // Small into large merging
     return is_disjoint(large, small, intersect);
@@ -78,7 +78,7 @@ void merge_into(map_t& large, map_t& small)
     std::swap(small, large);
   
   #ifdef TRACE_CALLS
-  outs_red << "merge " << small << std::endl << "into " << large << std::endl;
+  //outs_red << "merge " << small << std::endl << "into " << large << std::endl;
   #endif
   
   for (auto access : small)
@@ -140,6 +140,11 @@ public:
         
       merge_into(back().pw, oth.sw);
     }
+
+#ifdef TRACE_CALLS
+    if (frames.size() == 1)
+      outs_red << "WARNING hit back of frames on enter_serial!" << std::endl;
+#endif
   
     // Merge these tasks into serial
     merge_into(back().sw, back().pw);
