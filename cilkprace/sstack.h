@@ -15,16 +15,37 @@ using set_t = std::unordered_set<uint64_t>;
 using map_t = std::unordered_map<uint64_t, source_loc_t>;
 using multimap_t = std::unordered_multimap<uint64_t, source_loc_t>;
 
-// Type for a shadow stack frame
+// Type for a serial-parallel frame
 // A frame represents serial work followed by parallel work
-// serial vs parlalel determines whether or not disjointness checks are made
-struct shadow_stack_frame_t {
+// serial vs parallel determines whether or not disjointness checks are made
+struct sp_frame_t {
   bool is_continue = false;
   map_t sr;
   map_t sw;
   map_t pr;
   map_t pw;
 };
+
+// function stack metadata frame
+struct fn_info_frame_t {
+  const csi_id_t func_id;
+  const void* low_mark = nullptr;
+  const void* init_sp = nullptr;
+
+  fn_info_frame_t (const csi_id_t func_id=-1): func_id(func_id) {};
+
+  void register_alloca(const void* addr, uint64_t nb)
+  {
+    const void* start_addr = ((const char*)addr)+nb;
+    if (!init_sp)
+    {
+      init_sp = start_addr;
+      low_mark = addr;
+    }
+    assert(init_sp >= start_addr && "Stack grew in unexepcted direction!");
+    low_mark = std::min(low_mark, addr);
+  }
+};  
 
 std::ostream& operator<<(std::ostream& os, set_t s) {
   for (auto x : s)
@@ -90,33 +111,61 @@ void merge_into(map_t& large, map_t& small)
 struct shadow_stack_t {
 private:
   // Dynamic array of shadow-stack frames.
-  std::vector<shadow_stack_frame_t> frames;
+  std::vector<sp_frame_t> frames;
+  std::vector<fn_info_frame_t> infos;
 
 public:
-  shadow_stack_t(const int num=1) : frames(num) {
-  }
-  ~shadow_stack_t() {
-    assert(frames.size() <= 1 && "Shadow stack destructed with information!");
-  }
-  
-  shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames) {
+  shadow_stack_t(bool has_frame=true) : frames((int)has_frame), infos((int)has_frame) {
   }
 
-  shadow_stack_frame_t push() {
+  ~shadow_stack_t() {
+    std::cerr << "DESTRUCTING: " << infos.size() << std::endl;
+    assert(frames.size() <= 1 && "Shadow sp stack destructed with information!");
+    assert(infos.size() <= 1 && "Shadow info stack destructed with information!");
+  }
+  
+  shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames), infos(oth.infos) {
+  }
+
+  sp_frame_t push() {
     frames.emplace_back();
     return frames.back();
   }
 
-  shadow_stack_frame_t pop() {
-    assert(!frames.empty() && "Trying to pop() from empty shadow stack!");
+  sp_frame_t pop() {
+    assert(!frames.empty() && "Trying to pop() from empty shadow sp stack!");
     auto ret = frames.back();
     frames.pop_back();
     return ret;
   }
 
-  shadow_stack_frame_t& back() {
-    assert(!frames.empty() && "Trying to back() from empty shadow stack!");
+  sp_frame_t& back() {
+    assert(!frames.empty() && "Trying to back() from empty shadow sp stack!");
     return frames.back();
+  }
+  
+  fn_info_frame_t& info() {
+    assert(!infos.empty() && "Trying to back() from empty shadow info stack!");
+    return infos.back();
+  }
+  void enter_func(const csi_id_t func_id) {
+    infos.emplace_back(func_id);
+    assert(!infos.empty() && "Trying to back() from empty shadow info stack!");
+  }
+  void exit_func(const csi_id_t func_id) {
+    assert(info().func_id == func_id && "Trying to exit_func() with mismatched func_id!");
+    assert(back().is_continue == false && "Trying to exit_func() with a continue frame!");
+     
+#ifdef TRACE_CALLS
+    outs_red << "clearing from " << info().low_mark << " to " << info().init_sp << std::endl;
+#endif
+    if (info().init_sp)
+      for (uint64_t low = (uint64_t)info().low_mark; low <= (uint64_t)info().init_sp; low++)
+      {
+        back().sw.erase(low);
+      }
+    
+    infos.pop_back();
   }
 
   // Dumps the parallel section of the current stack frame into the serial section
@@ -200,6 +249,14 @@ public:
     back().sw[addr] = store;
   }
   
+  // Registers an alloca to the current frame
+  void register_alloca(const void* addr, size_t nb) {
+#ifdef TRACE_CALLS
+    outs_red << "register_alloca on " << addr << ", " << nb << std::endl;
+#endif
+    info().register_alloca(addr, nb);
+  }
+  
   /// Reducer support
   void append_stack(shadow_stack_t& oth) {
 #if TRACE_CALLS
@@ -221,7 +278,7 @@ public:
     std::cerr << "[" << wnum << "] Identity" << std::endl;
 #endif
 
-    new (view) shadow_stack_t(0);
+    new (view) shadow_stack_t(false);
   }
 
   static void reduce(void *left_view, void *right_view) {

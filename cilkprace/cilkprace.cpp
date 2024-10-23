@@ -75,6 +75,15 @@ public:
   void register_write(uint64_t addr, source_loc_t store) {
     stack.register_write(addr, store);
   }
+  void register_alloca(const void* addr, size_t nb) {
+    stack.register_alloca(addr, nb);
+  }
+  void enter_func(const csi_id_t func_id) {
+    stack.enter_func(func_id);
+  }
+  void exit_func(const csi_id_t func_id) {
+    stack.exit_func(func_id);
+  }
   void add_task_frame() {
     stack.add_task_frame();
   }
@@ -124,6 +133,7 @@ void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
   outs_red << "FUNC: " << entry->name << std::endl;
   if (prop.may_spawn)
     tool->add_task_frame();
+  tool->enter_func(func_id);
 }
 
 CILKTOOL_API
@@ -134,6 +144,7 @@ void __csi_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id,
       << "[W" << worker_number() << "] func_exit(feid=" << func_exit_id
       << ", fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
+  tool->exit_func(func_id);
   if (prop.may_spawn)
     tool->join();
 }
@@ -275,6 +286,7 @@ void __csi_after_alloca(const csi_id_t alloca_id, const void *addr,
       << ", addr=" << addr << ", nb=" << num_bytes << ", static="
       << prop.is_static << ")" << std::endl;
 #endif
+  tool->register_alloca(addr, num_bytes);
 }
 
 CILKTOOL_API
