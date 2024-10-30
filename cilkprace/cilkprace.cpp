@@ -84,8 +84,8 @@ public:
   void exit_func(const csi_id_t func_id) {
     stack.exit_func(func_id);
   }
-  void add_task_frame() {
-    stack.add_task_frame();
+  void add_sp_frame() {
+    stack.add_sp_frame();
   }
   void add_continue_frame() {
     stack.add_continue_frame();
@@ -132,7 +132,7 @@ void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
   auto entry = __csi_get_func_source_loc(func_id);
   outs_red << "FUNC: " << entry->name << std::endl;
   if (prop.may_spawn)
-    tool->add_task_frame();
+    tool->add_sp_frame();
   tool->enter_func(func_id);
 }
 

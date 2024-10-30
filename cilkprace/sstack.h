@@ -36,13 +36,25 @@ struct fn_info_frame_t {
 
   void register_alloca(const void* addr, uint64_t nb)
   {
-    const void* start_addr = ((const char*)addr)+nb;
+    const void* old_sp = ((const char*)addr)+nb;
+#ifdef TRACE_CALLS
+    outs_red << "register_alloca from " << old_sp << " to " << addr << std::endl;
+#endif
     if (!init_sp)
     {
-      init_sp = start_addr;
+      init_sp = old_sp;
       low_mark = addr;
+      return;
     }
-    assert(init_sp >= start_addr && "Stack grew in unexepcted direction!");
+    
+    if (old_sp != low_mark)
+    {   
+#ifdef TRACE_CALLS
+    outs_red << "\n\tWARNING unexpected SP move! " << (uint64_t)(low_mark) - (uint64_t)old_sp << " bytes\n" << std::endl;
+#endif
+    }
+
+    assert(init_sp >= old_sp && "Stack grew in unexepcted direction!");
     low_mark = std::min(low_mark, addr);
   }
 };  
@@ -154,7 +166,6 @@ public:
   }
   void exit_func(const csi_id_t func_id) {
     assert(info().func_id == func_id && "Trying to exit_func() with mismatched func_id!");
-    assert(back().is_continue == false && "Trying to exit_func() with a continue frame!");
      
 #ifdef TRACE_CALLS
     outs_red << "clearing from " << info().low_mark << " to " << info().init_sp << std::endl;
@@ -225,9 +236,9 @@ public:
   }
 
   // Declare that the current stack frame has children and create a stack frame for the child
-  void add_task_frame() {
+  void add_sp_frame() {
 #ifdef TRACE_CALLS
-    outs_red << "add_task_frame" << std::endl;
+    outs_red << "add_sp_frame" << std::endl;
 #endif
     push(); 
     back().is_continue = false;
