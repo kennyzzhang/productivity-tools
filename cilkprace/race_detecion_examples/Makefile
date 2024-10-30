@@ -1,11 +1,11 @@
-CC = ../build/bin/clang
-CFLAGS = -fopencilk -fcilktool=cilkprace -g
+CXX = ../build/bin/clang++
+CPPFLAGS = -fopencilk -fcilktool=cilkprace -g -O0
 
-OUTS = $(patsubst %.c,%.out,$(wildcard *.c))
+OUTS = $(patsubst %.cpp,%.out,$(wildcard *.cpp))
 
 .PHONY: all
 
 all: $(OUTS)
 
-%.out: %.c
-	$(CC) $(CFLAGS) $< -o $@
+%.out: %.cpp
+	$(CXX) $(CPPFLAGS) $< -o $@
