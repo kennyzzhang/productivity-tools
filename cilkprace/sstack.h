@@ -15,6 +15,51 @@ using set_t = std::unordered_set<uint64_t>;
 using map_t = std::unordered_map<uint64_t, source_loc_t>;
 using multimap_t = std::unordered_multimap<uint64_t, source_loc_t>;
 
+/*
+sp frames represent series work followed by parallel work
+That is, the s set represents the serial work
+and the p set represents the union of the parallel work's sets
+
+We use a binary forking model with arbitrary joining
+
+Tasks and Continues are two types of parallel work
+cilk_sync forces all parallel work spawned in the current function to complete before we can proceed
+
+In other words, every function is a sync border
+Equally, every function that may_spawn must serve as a sync border
+
+Continues can be stolen! We don't necessarily know if they're stolen?
+
+A sync must collect all parallel work that preceedes it in a function
+
+Boundary frames are a natural and correct way to do this
+Boundary frames are easy to prove correctness for under reducers.
+Much like the ostream reducer, the stack is concatenated back in the correct order
+
+
+Stack allocations depend on real ordering. Logical parallel analysis doesn't work.
+Whenever your deallocate a part of the stack, it might get reallocated logically in parallel but really in serial.
+
+You have unmark any deallocated stack by the time the disjoint check runs / it's 
+dumped into the p set
+
+That is, on every stack deallocation (prob func exit), we have to track what is deallocated.
+We don't care about how the stack pointer moves within a serial peice of code, we only care about it's current value and high water mark. That is, what can be reallocated.
+We lose use-after-free, but that's fine. asan catches that.
+
+We only need one fn info frame per task and continue :)
+
+tricky case: alloca during continue
+
+
+
+
+
+*/
+
+
+
+
 // Type for a serial-parallel frame
 // A frame represents serial work followed by parallel work
 // serial vs parallel determines whether or not disjointness checks are made
@@ -28,9 +73,15 @@ struct sp_frame_t {
 
 // function stack metadata frame
 struct fn_info_frame_t {
+  // Sanity checking
   const csi_id_t func_id;
+  
+  // Range of memory automatically freed by SP
   const void* low_mark = nullptr;
   const void* init_sp = nullptr;
+
+  //Number of continue frames
+  size_t ncontinues = 0;
 
   fn_info_frame_t (const csi_id_t func_id=-1): func_id(func_id) {};
 
@@ -90,7 +141,7 @@ std::ostream& operator<<(std::ostream& os, multimap_t s) {
 bool is_disjoint(map_t& small, map_t& large, multimap_t& intersect)
 {
   #ifdef TRACE_CALLS
-  //outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
+  outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
   #endif
   if (small.size() > large.size()) // Small into large merging
     return is_disjoint(large, small, intersect);
@@ -111,7 +162,7 @@ void merge_into(map_t& large, map_t& small)
     std::swap(small, large);
   
   #ifdef TRACE_CALLS
-  //outs_red << "merge " << small << std::endl << "into " << large << std::endl;
+  outs_red << "merge " << small << std::endl << "into " << large << std::endl;
   #endif
   
   for (auto access : small)
@@ -170,7 +221,7 @@ public:
 #ifdef TRACE_CALLS
     outs_red << "clearing from " << info().low_mark << " to " << info().init_sp << std::endl;
 #endif
-    if (info().init_sp)
+    if (false && info().init_sp)
       for (uint64_t low = (uint64_t)info().low_mark; low <= (uint64_t)info().init_sp; low++)
       {
         back().sw.erase(low);

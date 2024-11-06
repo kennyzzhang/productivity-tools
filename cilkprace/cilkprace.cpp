@@ -130,7 +130,7 @@ void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
       << prop.num_sync_reg << ", " << prop.may_spawn << ")" << std::endl;
 #endif
   auto entry = __csi_get_func_source_loc(func_id);
-  outs_red << "FUNC: " << entry->name << std::endl;
+  outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
   if (prop.may_spawn)
     tool->add_sp_frame();
   tool->enter_func(func_id);
@@ -216,7 +216,6 @@ CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
-  //tool->add_task_frame();
 }
 
 CILKTOOL_API
