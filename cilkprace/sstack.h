@@ -20,7 +20,7 @@ sp frames represent series work followed by parallel work
 That is, the s set represents the serial work
 and the p set represents the union of the parallel work's sets
 
-We use a binary forking model with arbitrary joining
+We use a binary forking model with unbounded joining (syncs)
 
 Tasks and Continues are two types of parallel work
 cilk_sync forces all parallel work spawned in the current function to complete before we can proceed
@@ -46,44 +46,55 @@ dumped into the p set
 That is, on every stack deallocation (prob func exit), we have to track what is deallocated.
 We don't care about how the stack pointer moves within a serial peice of code, we only care about it's current value and high water mark. That is, what can be reallocated.
 We lose use-after-free, but that's fine. asan catches that.
+Because we sync before task exit, we only check serial
 
 We only need one fn info frame per task and continue :)
 
 tricky case: alloca during continue
 
-
-
-
-
 */
-
-
 
 
 // Type for a serial-parallel frame
 // A frame represents serial work followed by parallel work
 // serial vs parallel determines whether or not disjointness checks are made
 struct sp_frame_t {
-  bool is_continue = false;
   map_t sr;
   map_t sw;
   map_t pr;
   map_t pw;
+}
+
+struct stack_tracker_t;
+
+// sp frame that represents a task
+struct task_t : public sp_frame_t {
+  stack_tracker_t stack_info;
+  const csi_id_t task_id;
+
+  task_t(const csi_id_t task_id) : task_id(task_id){};
 };
 
-// function stack metadata frame
-struct fn_info_frame_t {
-  // Sanity checking
+// sp frame the represents a continue
+struct continue_t : public sp_frame_t {
+  stack_tracker_t stack_info;
+
+};
+// non-sp frame that represents the sync border
+struct boundary_t {
   const csi_id_t func_id;
-  
+  const int nonboundary_lookback;
+  boundary_t(const csi_id_t func_id, const int lookback) : func_id(func_id), nonboundary_lookback(lookback) {};
+};
+
+// Union type that represents a task, continue, or boundary
+using frame_t = std::variant<boundary_t, continue_t, task_t>;
+
+// stores stack allocation determinism fixing info
+struct stack_tracker_t {
   // Range of memory automatically freed by SP
   const void* low_mark = nullptr;
   const void* init_sp = nullptr;
-
-  //Number of continue frames
-  size_t ncontinues = 0;
-
-  fn_info_frame_t (const csi_id_t func_id=-1): func_id(func_id) {};
 
   void register_alloca(const void* addr, uint64_t nb)
   {
@@ -105,7 +116,7 @@ struct fn_info_frame_t {
 #endif
     }
 
-    assert(init_sp >= old_sp && "Stack grew in unexepcted direction!");
+    assert(init_sp >= old_sp && "Stack grew in unexpected direction!");
     low_mark = std::min(low_mark, addr);
   }
 };  
@@ -138,6 +149,7 @@ std::ostream& operator<<(std::ostream& os, multimap_t s) {
   return os;
 }
 
+// Places the intersection of two maps in intersect and returns true if the intersection is empty
 bool is_disjoint(map_t& small, map_t& large, multimap_t& intersect)
 {
   #ifdef TRACE_CALLS
@@ -174,46 +186,66 @@ void merge_into(map_t& large, map_t& small)
 struct shadow_stack_t {
 private:
   // Dynamic array of shadow-stack frames.
-  std::vector<sp_frame_t> frames;
-  std::vector<fn_info_frame_t> infos;
+  std::vector<frame_t> frames;
 
 public:
-  shadow_stack_t(bool has_frame=true) : frames((int)has_frame), infos((int)has_frame) {
+  shadow_stack_t(bool has_frame=true) {
+    if (has_frame)
+    {
+      push_boundary();
+      //push_continue();
+    }
   }
 
   ~shadow_stack_t() {
-    std::cerr << "DESTRUCTING: " << infos.size() << std::endl;
+    std::cerr << "DESTRUCTING: " << frames.size() << std::endl;
     assert(frames.size() <= 1 && "Shadow sp stack destructed with information!");
-    assert(infos.size() <= 1 && "Shadow info stack destructed with information!");
   }
   
-  shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames), infos(oth.infos) {
+  shadow_stack_t(const shadow_stack_t &oth) : frames(oth.frames) {
   }
 
-  sp_frame_t push() {
-    frames.emplace_back();
-    return frames.back();
+  task_t push_task(const csi_id_t task_id) {
+    frames.emplace_back(std::in_place_type<task_t>, task_id);
+    return std::get<task_t>(frames.back());
+  }
+  boundary_t push_boundary(const csi_id_t func_id) {
+    int lookback = 1;
+    if (std::holds_alternative<boundary_t>(back())
+      lookback += std::get<boundary_t>(back()).nonboundary_lookback;
+
+    frames.emplace_back(std::in_place_type<boundary_t>, func_id);
+    return std::get<boundary_t>(frames.back());
+  }
+  continue_t push_continue() {
+    frames.emplace_back(std::in_place_type<continue_t>);
+    return std::get<continue_t>(frames.back());
   }
 
-  sp_frame_t pop() {
+  frame_t pop() {
     assert(!frames.empty() && "Trying to pop() from empty shadow sp stack!");
     auto ret = frames.back();
     frames.pop_back();
     return ret;
   }
 
-  sp_frame_t& back() {
+  frame_t& back() {
     assert(!frames.empty() && "Trying to back() from empty shadow sp stack!");
     return frames.back();
   }
-  
-  fn_info_frame_t& info() {
-    assert(!infos.empty() && "Trying to back() from empty shadow info stack!");
-    return infos.back();
+
+  frame_t& backmost_nonboundary() {
+    assert(!frames.empty() && "Trying to back() from empty shadow sp stack!");
+    if (std::holds_alternative<boundary_t>(back())
+      return frames[frames.size() -1 - std::get<boundary_t>(back()).nonboundary_lookback];
+    else
+      return frames.back();
   }
+
+  //TODO: We did a pass and stopped here
+  
   void enter_func(const csi_id_t func_id) {
-    infos.emplace_back(func_id);
-    assert(!infos.empty() && "Trying to back() from empty shadow info stack!");
+    backmost_nonboundary().stack_info.register_alloca()
   }
   void exit_func(const csi_id_t func_id) {
     assert(info().func_id == func_id && "Trying to exit_func() with mismatched func_id!");
