@@ -8,8 +8,16 @@
 #include <cassert>
 #include <iostream>
 #include <cilk/cilk.h>
+#include <variant>
 
 #include "outs_red.h"
+
+// helper type for the visitor #4
+template<class... Ts>
+struct overloaded : Ts... { using Ts::operator()...; };
+// explicit deduction guide (not needed as of C++20)
+template<class... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
 
 using set_t = std::unordered_set<uint64_t>;
 using map_t = std::unordered_map<uint64_t, source_loc_t>;
@@ -63,32 +71,7 @@ struct sp_frame_t {
   map_t sw;
   map_t pr;
   map_t pw;
-}
-
-struct stack_tracker_t;
-
-// sp frame that represents a task
-struct task_t : public sp_frame_t {
-  stack_tracker_t stack_info;
-  const csi_id_t task_id;
-
-  task_t(const csi_id_t task_id) : task_id(task_id){};
 };
-
-// sp frame the represents a continue
-struct continue_t : public sp_frame_t {
-  stack_tracker_t stack_info;
-
-};
-// non-sp frame that represents the sync border
-struct boundary_t {
-  const csi_id_t func_id;
-  const int nonboundary_lookback;
-  boundary_t(const csi_id_t func_id, const int lookback) : func_id(func_id), nonboundary_lookback(lookback) {};
-};
-
-// Union type that represents a task, continue, or boundary
-using frame_t = std::variant<boundary_t, continue_t, task_t>;
 
 // stores stack allocation determinism fixing info
 struct stack_tracker_t {
@@ -120,6 +103,32 @@ struct stack_tracker_t {
     low_mark = std::min(low_mark, addr);
   }
 };  
+
+// sp frame that represents a task
+struct task_t : public sp_frame_t {
+  stack_tracker_t stack_info;
+  const csi_id_t task_id;
+
+  task_t(const csi_id_t task_id) : task_id(task_id){};
+};
+
+// sp frame the represents a continue
+struct continue_t : public sp_frame_t {
+  stack_tracker_t stack_info;
+
+};
+// non-sp frame that represents the sync border
+struct boundary_t {
+  const csi_id_t func_id;
+  const int nonboundary_lookback;
+  boundary_t(const csi_id_t func_id, const int lookback) : func_id(func_id), nonboundary_lookback(lookback) {};
+};
+
+// Union type that represents a task, continue, or boundary
+using frame_t = std::variant<boundary_t, continue_t, task_t>;
+// nonboundary_frame_t
+using nb_frame_t = std::variant<continue_t&, task_t&>;
+
 
 std::ostream& operator<<(std::ostream& os, set_t s) {
   for (auto x : s)
@@ -192,7 +201,7 @@ public:
   shadow_stack_t(bool has_frame=true) {
     if (has_frame)
     {
-      push_boundary();
+      push_boundary(-1);
       //push_continue();
     }
   }
@@ -211,10 +220,10 @@ public:
   }
   boundary_t push_boundary(const csi_id_t func_id) {
     int lookback = 1;
-    if (std::holds_alternative<boundary_t>(back())
+    if (std::holds_alternative<boundary_t>(back()))
       lookback += std::get<boundary_t>(back()).nonboundary_lookback;
 
-    frames.emplace_back(std::in_place_type<boundary_t>, func_id);
+    frames.emplace_back(std::in_place_type<boundary_t>, func_id, lookback);
     return std::get<boundary_t>(frames.back());
   }
   continue_t push_continue() {
@@ -229,26 +238,42 @@ public:
     return ret;
   }
 
+  void pop_boundary(const csi_id_t func_id) {
+   assert(std::holds_alternative<boundary_t>(back()) && "Expected boundary frame in may_spawn function exit!");
+   assert(std::get<boundary_t>(pop()).func_id == func_id && "Expected matching function id for boundary frame on function exit");
+  }
+
   frame_t& back() {
     assert(!frames.empty() && "Trying to back() from empty shadow sp stack!");
     return frames.back();
   }
 
-  frame_t& backmost_nonboundary() {
+  nb_frame_t backmost_nonboundary() {
+    //FIXME: We might have to make this more robust when it comes to merging
+    //FIXME: We have to make this more robust
     assert(!frames.empty() && "Trying to back() from empty shadow sp stack!");
-    if (std::holds_alternative<boundary_t>(back())
-      return frames[frames.size() -1 - std::get<boundary_t>(back()).nonboundary_lookback];
-    else
-      return frames.back();
+  
+    long look = frames.size()-1;    
+    while(look >= 0 && std::holds_alternative<boundary_t>(frames[look]))
+    {
+      look -= std::get<boundary_t>(frames[look]).nonboundary_lookback;
+    }
+    assert(look >= 0 && "Negative backmost_nonboundary frame index!");
+    
+    return std::visit(overloaded{ 
+      [&](boundary_t& into) -> nb_frame_t {
+        assert(false && "No backmost_nonboundary frame!");
+        return nb_frame_t();
+      },
+      [&](auto&& into) -> nb_frame_t {
+        return into; 
+      }       
+    }, frames[look]);
   }
 
-  //TODO: We did a pass and stopped here
-  
-  void enter_func(const csi_id_t func_id) {
-    backmost_nonboundary().stack_info.register_alloca()
-  }
+  // Move into join
   void exit_func(const csi_id_t func_id) {
-    assert(info().func_id == func_id && "Trying to exit_func() with mismatched func_id!");
+    /*assert(info().func_id == func_id && "Trying to exit_func() with mismatched func_id!");
      
 #ifdef TRACE_CALLS
     outs_red << "clearing from " << info().low_mark << " to " << info().init_sp << std::endl;
@@ -260,6 +285,7 @@ public:
       }
     
     infos.pop_back();
+    */
   }
 
   // Dumps the parallel section of the current stack frame into the serial section
@@ -271,27 +297,35 @@ public:
 
     // The state of the stack at this point is a bit funky
     // We know that all forks have joined
-    while(frames.size() >= 2 && back().is_continue)
+    
+     
+    while(frames.size() >= 2 && std::holds_alternative<continue_t>(back()))
     {
       auto oth = pop();
       // The other stack contains its accesses in the serial set and parallel set
-      // Now it's only serial set
-      merge_into(oth.sw, oth.pw);
-
-      // Check if there's a race 
-      is_disjoint(back().pw, oth.sw, collisions);
+      std::visit([&](auto&& into) {
+        // All accesses should be in the serial set
+        merge_into(oth.sw, oth.pw);
         
-      merge_into(back().pw, oth.sw);
+        // Check if there's a race 
+        is_disjoint(into.pw, oth.sw, collisions);
+        
+        merge_into(into.pw, oth.sw);
+  
+      }, backmost_nonboundary());
     }
 
 #ifdef TRACE_CALLS
     if (frames.size() == 1)
       outs_red << "WARNING hit back of frames on enter_serial!" << std::endl;
 #endif
+
+    std::visit([&](auto&& into) {
+        // Merge these tasks into serial
+        merge_into(into.sw, into.pw);
+        into.pw.clear();
+    }, backmost_nonboundary());
   
-    // Merge these tasks into serial
-    merge_into(back().sw, back().pw);
-    back().pw.clear();
     return collisions.empty();
   } 
   
@@ -302,45 +336,37 @@ public:
     outs_red << "join" << std::endl;
 #endif
     // Grab that fork's frame
-    auto oth = pop();
-    assert(oth.is_continue == false && "Expected task frame in join!");
+    assert(std::holds_alternative<task_t>(back()) && "Expected task frame in join!");
+    task_t oth = std::get<task_t>(pop());
+    nb_frame_t& back = backmost_nonboundary();
+    
+    std::visit([&collisions, &oth](auto&& back) { 
+          
+        //TODO: Fixup stack
+  
+        // The other stack contains its accesses in the serial set and parallel set
+        // Now it's only serial set
+        merge_into(oth.sw, oth.pw);
 
-    // The other stack contains its accesses in the serial set and parallel set
-    // Now it's only serial set
-    merge_into(oth.sw, oth.pw);
+        // Check if there's a race 
+        is_disjoint(back.pw, oth.sw, collisions);
 
-    // Check if there's a race 
-    is_disjoint(back().pw, oth.sw, collisions);
+        // We have to store those writes 
+        merge_into(back.pw, oth.sw);
 
-    // We have to store those writes 
-    merge_into(back().pw, oth.sw);
+        }, back);
     
     return collisions.empty();
   }
 
-  // Declare that the current stack frame has children and create a stack frame for the child
-  void add_sp_frame() {
-#ifdef TRACE_CALLS
-    outs_red << "add_sp_frame" << std::endl;
-#endif
-    push(); 
-    back().is_continue = false;
-  }
-    
-  void add_continue_frame() {
-#ifdef TRACE_CALLS
-    outs_red << "add_continue_frame" << std::endl;
-#endif
-    push(); 
-    back().is_continue = true;
-  }
-  
   // Registers a write to the current frame
   void register_write(uint64_t addr, source_loc_t store) {
 #ifdef TRACE_CALLS
     outs_red << "register_write on " << (void*)addr << std::endl;
 #endif
-    back().sw[addr] = store;
+    std::visit([&](auto&& back) {
+      back.sw[addr] = store;
+    }, backmost_nonboundary());
   }
   
   // Registers an alloca to the current frame
@@ -348,9 +374,11 @@ public:
 #ifdef TRACE_CALLS
     outs_red << "register_alloca on " << addr << ", " << nb << std::endl;
 #endif
-    info().register_alloca(addr, nb);
+    std::visit([&](auto&& back) {
+        back.stack_info.register_alloca(addr, nb);
+    }, backmost_nonboundary());
   }
-  
+ 
   /// Reducer support
   void append_stack(shadow_stack_t& oth) {
 #if TRACE_CALLS

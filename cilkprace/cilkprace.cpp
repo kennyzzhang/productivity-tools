@@ -78,11 +78,24 @@ public:
   void register_alloca(const void* addr, size_t nb) {
     stack.register_alloca(addr, nb);
   }
-  void enter_func(const csi_id_t func_id) {
-    stack.enter_func(func_id);
+  void enter_func(const csi_id_t func_id, const bool may_spawn) {
+    if (may_spawn)
+      stack.push_boundary(func_id);
   }
-  void exit_func(const csi_id_t func_id) {
-    stack.exit_func(func_id);
+  void exit_func(const csi_id_t func_id, const bool may_spawn) {
+    if (may_spawn)
+    {
+      stack.pop_boundary(func_id);
+    } 
+  }
+  void task(const csi_id_t task_id) {
+    stack.push_task(task_id);
+  }
+  void exit_task(const csi_id_t task_id) {
+    multimap_t collisions;
+    stack.join(collisions);
+    if (!collisions.empty())
+      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl << collisions << std::endl << std::endl;
   }
   void add_sp_frame() {
     stack.add_sp_frame();
@@ -96,13 +109,6 @@ public:
     if (!collisions.empty())
       outs_red << "\nRACE CONDITION DURING SYNC" << std::endl << collisions << std::endl << std::endl;
   }
-  void join() {
-    multimap_t collisions;
-    stack.join(collisions);
-    if (!collisions.empty())
-      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl << collisions << std::endl << std::endl;
-  }
-
 };
 
 static std::unique_ptr<CilkgraphImpl_t> tool =
@@ -131,9 +137,7 @@ void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
 #endif
   auto entry = __csi_get_func_source_loc(func_id);
   outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
-  if (prop.may_spawn)
-    tool->add_sp_frame();
-  tool->enter_func(func_id);
+  tool->enter_func(func_id, prop.may_spawn);
 }
 
 CILKTOOL_API
@@ -144,9 +148,7 @@ void __csi_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id,
       << "[W" << worker_number() << "] func_exit(feid=" << func_exit_id
       << ", fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
-  tool->exit_func(func_id);
-  if (prop.may_spawn)
-    tool->join();
+  tool->exit_func(func_id, prop.may_spawn);
 }
 
 CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
@@ -216,6 +218,7 @@ CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
+  tool->task(task_id);
 }
 
 CILKTOOL_API
@@ -228,10 +231,7 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
       << ", tid=" << task_id << ", did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  // Attach stack as if they occured in parallel.
-   // tool->join();
-//  assert(disjoint && "Race condition!");
-
+  tool->exit_task(task_id);
 }
 
 CILKTOOL_API
