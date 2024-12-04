@@ -199,8 +199,7 @@ public:
   shadow_stack_t(bool has_frame=true) {
     if (has_frame)
     {
-      push_boundary(-1);
-      //push_continue();
+      push_task(-1);
     }
   }
 
@@ -218,7 +217,7 @@ public:
   }
   boundary_t push_boundary(const csi_id_t func_id) {
     int lookback = 1;
-    if (std::holds_alternative<boundary_t>(back()))
+    if (!frames.empty() && std::holds_alternative<boundary_t>(back()))
       lookback += std::get<boundary_t>(back()).nonboundary_lookback;
 
     frames.emplace_back(std::in_place_type<boundary_t>, func_id, lookback);
