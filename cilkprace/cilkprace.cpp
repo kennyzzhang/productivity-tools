@@ -98,10 +98,10 @@ public:
       outs_red << "\nRACE CONDITION TASK EXIT" << std::endl << collisions << std::endl << std::endl;
   }
   void add_sp_frame() {
-    stack.add_sp_frame();
+    //stack.add_sp_frame();
   }
   void add_continue_frame() {
-    stack.add_continue_frame();
+    stack.push_continue();
   }
   void enter_serial() {
     multimap_t collisions;
