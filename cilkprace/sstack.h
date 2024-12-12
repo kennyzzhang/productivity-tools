@@ -67,8 +67,8 @@ tricky case: alloca during continue
 // stores stack allocation determinism fixing info
 struct stack_tracker_t {
   // Range of memory automatically freed by SP
-  const void* low_mark = nullptr;
-  const void* init_sp = nullptr;
+  const void* low_sp = nullptr;
+  const void* high_sp = nullptr;
 
   void register_alloca(const void* addr, uint64_t nb)
   {
@@ -76,22 +76,24 @@ struct stack_tracker_t {
 #ifdef TRACE_CALLS
     outs_red << "register_alloca from " << old_sp << " to " << addr << std::endl;
 #endif
-    if (!init_sp)
+    if (!high_sp)
     {
-      init_sp = old_sp;
-      low_mark = addr;
+      high_sp = old_sp;
+      low_sp = addr;
       return;
     }
     
-    if (old_sp != low_mark)
+    assert(high_sp >= old_sp && "Stack grew in unexpected direction!");
+    
+    uint64_t sp_jump = (uint64_t)high_sp-(uint64_t)low_sp;
+    if (sp_jump > 0)
     {   
 #ifdef TRACE_CALLS
-    outs_red << "\n\tWARNING unexpected SP move! " << (uint64_t)(low_mark) - (uint64_t)old_sp << " bytes\n" << std::endl;
+    outs_red << "\n\tWARNING unexpected SP move! " << (uint64_t)(low_sp) - (uint64_t)old_sp << " bytes\n" << std::endl;
 #endif
     }
 
-    assert(init_sp >= old_sp && "Stack grew in unexpected direction!");
-    low_mark = std::min(low_mark, addr);
+    low_sp = std::min(low_sp, addr);
   }
 };  
 
@@ -103,6 +105,19 @@ struct sp_frame_t {
   map_t pr;
   map_t pw;
   stack_tracker_t stack_info;
+
+  void unregister_deallocated_stack()
+  {
+#ifdef TRACE_CALLS
+      outs_red << "unregister_deallocated_stack()" << std::endl;
+#endif
+    //Assumption: They allocated the whole memory, so they're going to use the whole memory 
+    //TODO: consider incrmenting by more than 1
+    for (uint64_t addr = (uint64_t)stack_info.low_sp; addr <= (uint64_t)stack_info.high_sp; addr += 1)
+    {
+      sw.erase(addr);
+    }
+  }
 };
 
 
@@ -299,6 +314,9 @@ public:
       auto& into = backmost_nonboundary();
       // All accesses should be in the serial set
       merge_into(oth.sw, oth.pw);
+    
+      //Fixup oth.sw using stack info from oth
+      oth.unregister_deallocated_stack();
 
       // Check if there's a race 
       is_disjoint(into.pw, oth.sw, collisions);
@@ -330,11 +348,12 @@ public:
     task_t oth = std::get<task_t>(pop());
     sp_frame_t& back = backmost_nonboundary();
     
-    //TODO: Fixup stack
-
     // The other stack contains its accesses in the serial set and parallel set
     // Now it's only serial set
     merge_into(oth.sw, oth.pw);
+
+    //Fixup oth.sw using stack info from oth
+    oth.unregister_deallocated_stack();
 
     // Check if there's a race 
     is_disjoint(back.pw, oth.sw, collisions);
