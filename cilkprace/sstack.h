@@ -89,7 +89,7 @@ struct stack_tracker_t {
     if (sp_jump > 0)
     {   
 #ifdef TRACE_CALLS
-    outs_red << "\n\tWARNING unexpected SP move! " << (uint64_t)(low_sp) - (uint64_t)old_sp << " bytes\n" << std::endl;
+    outs_red << "\n\tWARNING unexpected SP move! " << sp_jump <<  " bytes\n" << std::endl;
 #endif
     }
 
