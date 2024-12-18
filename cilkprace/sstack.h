@@ -389,7 +389,9 @@ public:
     #pragma clang diagnostic pop
     std::cerr << "[" << wnum << "] Append Stack" << std::endl;
 #endif
-    //frames.insert(frames.end(), oth.frames.begin(), oth.frames.end());
+    //frames.reserve(frames.size() + oth.frames.size());
+    std::move(oth.frames.begin(), oth.frames.end(), std::back_inserter(frames));
+    oth.frames.clear();
   }
 
   static void identity(void *view) {
