@@ -59,7 +59,10 @@ int nqueens (int n, int j, char *a) {
   (void) memset(count, 0, n * sizeof (int));
 
   b = (char *) alloca((j + 1) * sizeof (char));
-  memcpy(b, a, j * sizeof (char));
+  //memcpy(b, a, j * sizeof (char));
+  for (int k = 0; k < j; k++)
+    b[k] = a[k];
+  //memcpy(a, b, j * sizeof (char));
 
   cilk_scope {
     for (int i = 0; i < n; i++) {

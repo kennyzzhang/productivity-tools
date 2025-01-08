@@ -2,6 +2,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <unordered_map>
 #include <map>
 #include <algorithm>
 #include <vector>
@@ -112,10 +113,11 @@ struct sp_frame_t {
       outs_red << "unregister_deallocated_stack()" << std::endl;
 #endif
     //Assumption: They allocated the whole memory, so they're going to use the whole memory 
-    //TODO: consider incrmenting by more than 1
+    //TODO: consider incrmenting by more than 1. See register read and write
     for (uint64_t addr = (uint64_t)stack_info.low_sp; addr <= (uint64_t)stack_info.high_sp; addr += 1)
     {
       sw.erase(addr);
+      sr.erase(addr);
     }
   }
 };
@@ -306,7 +308,7 @@ public:
     // The state of the stack at this point is a bit funky
     // We know that all forks have joined
     
-     
+    // Accumulate all of the children into the parallel sets 
     while(frames.size() >= 2 && std::holds_alternative<continue_t>(back()))
     {
       continue_t oth = std::get<continue_t>(pop());
@@ -314,14 +316,19 @@ public:
       auto& into = backmost_nonboundary();
       // All accesses should be in the serial set
       merge_into(oth.sw, oth.pw);
+      merge_into(oth.sr, oth.pr);
     
       //Fixup oth.sw using stack info from oth
       oth.unregister_deallocated_stack();
 
       // Check if there's a race 
+      //FIXME: This would be a great place to do the race reporting
       is_disjoint(into.pw, oth.sw, collisions);
+      is_disjoint(into.pw, oth.sr, collisions);
+      is_disjoint(into.pr, oth.sw, collisions);
 
       merge_into(into.pw, oth.sw);
+      merge_into(into.pr, oth.sr);
     }
 
 #ifdef TRACE_CALLS
@@ -329,10 +336,12 @@ public:
       outs_red << "WARNING hit back of frames on enter_serial!" << std::endl;
 #endif
 
-
+    // We've accumulated our children. We know about all the races or lack thereof. Now we pretend it was all in serial
     auto& into = backmost_nonboundary();
     merge_into(into.sw, into.pw);
+    merge_into(into.sr, into.pr);
     into.pw.clear();
+    into.pr.clear();
   
     return collisions.empty();
   } 
@@ -351,15 +360,20 @@ public:
     // The other stack contains its accesses in the serial set and parallel set
     // Now it's only serial set
     merge_into(oth.sw, oth.pw);
+    merge_into(oth.sr, oth.pr);
 
-    //Fixup oth.sw using stack info from oth
+    //Fixup oth.sw and oth.sr using stack info from oth
     oth.unregister_deallocated_stack();
 
     // Check if there's a race 
+    //TODO: This would be a great place to do the race reporting
     is_disjoint(back.pw, oth.sw, collisions);
+    is_disjoint(back.pw, oth.sr, collisions);
+    is_disjoint(back.pr, oth.sw, collisions);
 
     // We have to store those writes 
     merge_into(back.pw, oth.sw);
+    merge_into(back.pr, oth.sr);
     
     return collisions.empty();
   }
@@ -371,6 +385,15 @@ public:
 #endif
     backmost_nonboundary().sw[addr] = store;
   }
+  
+  // Registers a read to the current frame
+  void register_read(uint64_t addr, source_loc_t store) {
+#ifdef TRACE_CALLS
+    outs_red << "register_read on " << (void*)addr << std::endl;
+#endif
+    backmost_nonboundary().sr[addr] = store;
+  }
+  
   
   // Registers an alloca to the current frame
   void register_alloca(const void* addr, size_t nb) {

@@ -75,6 +75,9 @@ public:
   void register_write(uint64_t addr, source_loc_t store) {
     stack.register_write(addr, store);
   }
+  void register_read(uint64_t addr, source_loc_t store) {
+    stack.register_read(addr, store);
+  }
   void register_alloca(const void* addr, size_t nb) {
     stack.register_alloca(addr, nb);
   }
@@ -153,7 +156,6 @@ void __csi_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id,
 
 CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
                             const int32_t num_bytes, const load_prop_t prop) {
-return;
 #ifdef TRACE_CALLS
   outs_red
       << "[W" << worker_number() << "] before_load(lid=" << load_id << ", addr="
@@ -164,6 +166,13 @@ return;
       << prop.is_thread_local << ", basic_read_before_write="
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
+  // Putting this guard here shouldn't affect correctness but might make us faster
+  // As we filter out reads that are about to be writes anyway
+  //if (prop.is_read_before_write_in_bb)
+  //  return;
+  auto store = __csi_get_load_source_loc(load_id);
+  tool->register_read((uint64_t)addr, *store);
+  outs_red << "LOAD ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 }
 
 CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
@@ -192,6 +201,7 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
+  //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   auto store = __csi_get_store_source_loc(store_id);
   tool->register_write((uint64_t)addr, *store);
   outs_red << "WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;

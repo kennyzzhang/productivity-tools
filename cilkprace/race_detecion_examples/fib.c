@@ -15,7 +15,7 @@ long fib(long n) {
 }
 
 int main(int argc, char *argv[]) {
-  long n = 10;
+  long n = 30;
   if (argc > 1)
     n = atol(argv[1]);
 
