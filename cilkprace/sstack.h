@@ -221,7 +221,9 @@ public:
   }
 
   ~shadow_stack_t() {
+    #ifdef TRACE_CALLS
     std::cerr << "DESTRUCTING: " << frames.size() << std::endl;
+    #endif
     assert(frames.size() <= 1 && "Shadow sp stack destructed with information!");
   }
   
