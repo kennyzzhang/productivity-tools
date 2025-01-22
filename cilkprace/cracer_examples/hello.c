@@ -1,0 +1,8 @@
+#include <stdio.h>
+#include "fixup.h"
+
+cilk int main(int argc, char *argv[])
+{
+     printf("Hello, world!\n");
+     return 0;
+}
