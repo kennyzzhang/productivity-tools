@@ -57,11 +57,11 @@ static const char *ident __attribute__((__unused__))
  * log factor in the critical path (left as homework).
  */
 
-#include <cilk-lib.cilkh>
+#include "fixup.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getoptions.h>
+#include "getoptions.h"
 
 typedef long ELM;
 
@@ -478,17 +478,14 @@ cilk int main(int argc, char **argv)
 
   /* Timing. "Start" timers */
   sync;
-  cp_begin = Cilk_user_critical_path;
-  wk_begin = Cilk_user_work;
-  tm_begin = Cilk_get_wall_time();
+  ctimer_t timer;
+  ctimer_start(&timer);
 
   spawn cilksort(array, tmp, size);
   sync;
+  ctimer_stop(&timer);
 
   /* Timing. "Stop" timers */
-  tm_elapsed = Cilk_get_wall_time() - tm_begin;
-  wk_elapsed = Cilk_user_work - wk_begin;
-  cp_elapsed = Cilk_user_critical_path - cp_begin;
 
   success = 1;
   for (i = 0; i < size; ++i)
@@ -501,9 +498,7 @@ cilk int main(int argc, char **argv)
 	  printf("\nCilk Example: cilksort\n");
 	  printf("	      running on %d processor%s\n\n", Cilk_active_size, Cilk_active_size > 1 ? "s" : "");
 	  printf("options: number of elements = %ld\n\n", size);
-	  printf("Running time  = %4f s\n", Cilk_wall_time_to_sec(tm_elapsed));
-	  printf("Work          = %4f s\n", Cilk_time_to_sec(wk_elapsed));
-	  printf("Critical path = %4f s\n\n", Cilk_time_to_sec(cp_elapsed));
+      ctimer_print(timer, "cilksort");
   }
 
   free(array);
