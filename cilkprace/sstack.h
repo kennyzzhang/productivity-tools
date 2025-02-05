@@ -73,28 +73,33 @@ struct stack_tracker_t {
 
   void register_alloca(const void* addr, uint64_t nb)
   {
-    const void* old_sp = ((const char*)addr)+nb;
+    const void* low_alloc = addr;
+    const void* high_alloc = ((const char*)addr)+nb;
 #ifdef TRACE_CALLS
-    outs_red << "register_alloca from " << old_sp << " to " << addr << std::endl;
+    outs_red << "register_alloca from " << low_alloc << " to " << high_alloc << std::endl;
 #endif
     if (!high_sp)
     {
-      high_sp = old_sp;
-      low_sp = addr;
+      high_sp = high_alloc;
+      low_sp = low_alloc;
       return;
     }
     
-    assert(high_sp >= old_sp && "Stack grew in unexpected direction!");
+    //Allocas can be reordered on -O3. This assert is not useful or true
+    //assert(high_sp >= old_sp && "Stack grew in unexpected direction!");
     
-    uint64_t sp_jump = (uint64_t)high_sp-(uint64_t)low_sp;
-    if (sp_jump > 0)
+    auto new_low_sp = std::min(low_sp, low_alloc);
+    auto new_high_sp = std::max(high_sp, high_alloc);
+    
+    auto sp_jump = std::max((const char*)(low_sp) - (const char*)(new_low_sp), (const char*)(new_high_sp) - (const char*)(high_sp));
+    if (sp_jump > 1024*1024) // 1 MiB
     {   
-#ifdef TRACE_CALLS
+//#ifdef TRACE_CALLS
     outs_red << "\n\tWARNING unexpected SP move! " << sp_jump <<  " bytes\n" << std::endl;
-#endif
+//#endif
     }
-
-    low_sp = std::min(low_sp, addr);
+    low_sp = new_low_sp;
+    high_sp = new_high_sp;
   }
 };  
 
