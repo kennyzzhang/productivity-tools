@@ -5,6 +5,10 @@ set(CILKPRACE_SOURCES
   csirt.cpp
   )
 
+set(CILKPRACE_BITCODE_SOURCE
+  cilkprace.cpp
+  )
+
 include_directories(${CILKTOOLS_SOURCE_DIR}/include)
 
 set(CILKPRACE_CFLAGS ${SANITIZER_COMMON_CFLAGS})
@@ -25,6 +29,12 @@ set(CILKPRACE_DYNAMIC_DEFINITIONS ${CILKPRACE_COMMON_DEFINITIONS})
 set(CILKPRACE_COMMON_LIBS ${SANITIZER_CXX_ABI_LIBRARY} ${SANITIZER_COMMON_LINK_LIBS})
 
 set(CILKPRACE_DYNAMIC_LIBS ${CILKPRACE_COMMON_LIBS})
+
+
+# Setup flags and defs for cilktool bitcode build
+set(CILKPRACE_BITCODE_CFLAGS ${CILKPRACE_CFLAGS} -emit-llvm)
+set(CILKPRACE_BITCODE_DEFINITIONS ${CILKPRACE_COMMON_DEFINITIONS}
+    "CILKPRACE_VIS=__attribute__((noinline))")
 
 # Build Cilkprace runtimes shipped with Clang.
 add_cilktools_component(cilkprace)
@@ -51,19 +61,42 @@ if (APPLE)
       PARENT_TARGET cilkprace)
 
 else()
+  # Compile Cilkprace sources into an object library
+  add_cilktools_object_libraries(RTCilkprace_dynamic
+    ARCHS ${CILKPRACE_SUPPORTED_ARCH}
+    SOURCES ${CILKPRACE_SOURCES}
+    CFLAGS ${CILKPRACE_DYNAMIC_CFLAGS}
+    DEFS ${CILKPRACE_DYNAMIC_DEFINITIONS}
+    DEPS ${CILKPRACE_OBJ_DEPS})
+
+  add_cilktools_object_libraries(RTCilkprace
+    ARCHS ${CILKPRACE_SUPPORTED_ARCH}
+    SOURCES ${CILKPRACE_SOURCES}
+    CFLAGS ${CILKPRACE_CFLAGS}
+    DEFS ${CILKPRACE_COMMON_DEFINITIONS}
+    DEPS ${CILKPRACE_OBJ_DEPS})
+
   foreach (arch ${CILKPRACE_SUPPORTED_ARCH})
+    add_cilktools_bitcode(cilkprace
+      ARCHS ${arch}
+      SOURCES ${CILKPRACE_BITCODE_SOURCE}
+      CFLAGS ${CILKPRACE_BITCODE_CFLAGS}
+      DEFS ${CILKPRACE_BITCODE_DEFINITIONS}
+      PARENT_TARGET cilkprace)
+
     add_cilktools_runtime(clang_rt.cilkprace
       STATIC
       ARCHS ${arch}
-      SOURCES ${CILKPRACE_SOURCES}
+      OBJECT_LIBS RTCilkprace
       CFLAGS ${CILKPRACE_CFLAGS}
+      LINK_FLAGS ${CILKPRACE_STATIC_LINK_FLAGS}
       DEFS ${CILKPRACE_COMMON_DEFINITIONS}
       PARENT_TARGET cilkprace)
 
     add_cilktools_runtime(clang_rt.cilkprace
       SHARED
       ARCHS ${arch}
-      SOURCES ${CILKPRACE_SOURCES}
+      OBJECT_LIBS RTCilkprace_dynamic
       CFLAGS ${CILKPRACE_DYNAMIC_CFLAGS}
       LINK_FLAGS ${CILKPRACE_DYNAMIC_LINK_FLAGS}
       LINK_LIBS ${CILKPRACE_DYNAMIC_LIBS}
@@ -73,5 +106,5 @@ else()
 endif()
 
 if (CILKTOOLS_INCLUDE_TESTS)
-  # TOdo: Add tests
+  # TODO: add tests
 endif()
