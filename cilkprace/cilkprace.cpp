@@ -22,7 +22,7 @@ cilk::ostream_reducer<char> outs_red([]() -> std::basic_ostream<char>& {
             return std::cout;
             }());
 #endif
-class CilkgraphImpl_t {
+class CilkpraceImpl_t {
 public:
   //shadow_stack_t stack;
 
@@ -46,7 +46,7 @@ private:
     }
 
     struct RAII {
-      CilkgraphImpl_t& this_;
+      CilkpraceImpl_t& this_;
 
       RAII(decltype(this_) this_) : this_(this_) {
 #ifndef OUTS_CERR
@@ -66,12 +66,12 @@ private:
   } register_reducers = {.raii{*this}};
 
 public:
-  CilkgraphImpl_t() : stack()
+  CilkpraceImpl_t() : stack()
          // Not only are reducer callbacks not implemented, the hyperobject
          // is not even default constructed unless explicitly constructed.
   {}
 
-  ~CilkgraphImpl_t() {}
+  ~CilkpraceImpl_t() {}
 
   void register_write(uint64_t addr, source_loc_t store) {
     stack.register_write(addr, store);
@@ -115,7 +115,7 @@ public:
   }
 };
 
-static std::unique_ptr<CilkgraphImpl_t> tool =
+std::unique_ptr<CilkpraceImpl_t> tool =
 std::make_unique<decltype(tool)::element_type>();
 
 static unsigned worker_number() {
