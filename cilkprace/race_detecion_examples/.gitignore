@@ -1,2 +1,6 @@
 *.out
+*.san
+*.csan
+*.ll
+*.notool
 
