@@ -1,10 +1,10 @@
 CXX = ../build/bin/clang++
 CSAN_BC := $(shell find ../../../../build -name "*cilksan.bc")
 PRACE_BC := $(shell find ../../../../build -name "*cilkprace.bc")
-CPPFLAGS = -fopencilk -fcilktool=cilkprace -g -O3 #-mllvm -csi-tool-bitcode=$(PRACE_BC)
-CPPFLAGS_NOTOOL = -fopencilk -g -O3
-CPPFLAGS_CSAN = -fopencilk -fsanitize=cilk -g -O3 #-mllvm -csi-tool-bitcode=$(CSAN_BC)
-CPPFLAGS_SAN = -fopencilk -fsanitize=cilkprace -O3 -g -mllvm -csi-tool-bitcode=$(PRACE_BC)
+CPPFLAGS = -fopencilk -fcilktool=cilkprace -g -O0 -mllvm -csi-tool-bitcode=$(PRACE_BC)
+CPPFLAGS_NOTOOL = -fopencilk -g -O0
+CPPFLAGS_CSAN = -fopencilk -fsanitize=cilk -g -O0  #-mllvm -csi-tool-bitcode=$(CSAN_BC)
+CPPFLAGS_SAN = -fopencilk -fsanitize=cilkprace -g -O0 #-mllvm -csi-tool-bitcode=$(PRACE_BC)
 
 FILES = blah.cpp fib.cpp memcpy_race.cpp single_spawn_norace.cpp single_spawn_rr_norace.cpp stack_reuse.cpp conditional_sync.cpp  loop.cpp nqueens.cpp single_spawn_race.cpp single_spawn_rw_race.cpp # strdup.cpp
 

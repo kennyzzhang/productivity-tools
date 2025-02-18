@@ -1,4 +1,10 @@
 #pragma once
+#include <cilk/cilk_api.h>
+#include <cilk/ostream_reducer.h>
+#include <iostream>
+#include <fstream>
+
+#include "memory"
 
 extern std::unique_ptr<std::ofstream> outf;
 
@@ -9,3 +15,4 @@ extern std::unique_ptr<std::ofstream> outf;
 #else
 extern cilk::ostream_reducer<char> outs_red;
 #endif
+

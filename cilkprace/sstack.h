@@ -121,8 +121,8 @@ struct sp_frame_t {
     //TODO: consider incrmenting by more than 1. See register read and write
     for (uint64_t addr = (uint64_t)stack_info.low_sp; addr <= (uint64_t)stack_info.high_sp; addr += 1)
     {
-      sw.erase(addr);
-      sr.erase(addr);
+      //sw.erase(addr);
+      //sr.erase(addr);
     }
   }
 };
@@ -150,23 +150,23 @@ struct boundary_t {
 using frame_t = std::variant<boundary_t, continue_t, task_t>;
 
 
-std::ostream& operator<<(std::ostream& os, set_t s) {
+inline std::ostream& operator<<(std::ostream& os, set_t s) {
   for (auto x : s)
     os << (void*)x << ", ";
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, source_loc_t s) {
+inline std::ostream& operator<<(std::ostream& os, source_loc_t s) {
   os << "(" << s.name << ", " << s.line_number<< ")";
   return os;
 }
 
-std::ostream& operator<<(std::ostream& os, map_t s) {
+inline std::ostream& operator<<(std::ostream& os, map_t s) {
   for (auto it : s)
     os << (void*)it.first << ", ";
   return os;
 }
-std::ostream& operator<<(std::ostream& os, multimap_t s) {
+inline std::ostream& operator<<(std::ostream& os, multimap_t s) {
   for (auto it = s.begin(); it != s.end();)
   {
     auto current = it->first; 
@@ -179,7 +179,7 @@ std::ostream& operator<<(std::ostream& os, multimap_t s) {
 }
 
 // Places the intersection of two maps in intersect and returns true if the intersection is empty
-bool is_disjoint(map_t& small, map_t& large, multimap_t& intersect)
+inline bool is_disjoint(map_t& small, map_t& large, multimap_t& intersect)
 {
   #ifdef TRACE_CALLS
   outs_red << "disjoint 1 \t" << small << std::endl << "disjoint 2 \t" << large << std::endl;
@@ -197,7 +197,7 @@ bool is_disjoint(map_t& small, map_t& large, multimap_t& intersect)
 }
 
 //Merges the second argument into the first. Potentially modifies the second argument
-void merge_into(map_t& large, map_t& small) 
+inline void merge_into(map_t& large, map_t& small) 
 {
   if (small.size() > large.size()) // Small into large merging
     std::swap(small, large);
