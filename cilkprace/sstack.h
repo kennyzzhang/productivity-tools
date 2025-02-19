@@ -386,7 +386,7 @@ public:
   }
 
   // Registers a write to the current frame
-  void register_write(uint64_t addr, source_loc_t store) {
+  void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
 #ifdef TRACE_CALLS
     outs_red << "register_write on " << (void*)addr << std::endl;
 #endif
@@ -394,7 +394,7 @@ public:
   }
   
   // Registers a read to the current frame
-  void register_read(uint64_t addr, source_loc_t store) {
+  void register_read(uint64_t addr, size_t num_bytes, source_loc_t store) {
 #ifdef TRACE_CALLS
     outs_red << "register_read on " << (void*)addr << std::endl;
 #endif

@@ -3,9 +3,11 @@
 set(CILKPRACE_SOURCES
   cilkprace.cpp
   cilkprace_csi.cpp
-  cilkprace_csan.cpp
   csirt.cpp
+  cilkprace_csan.cpp
+  csanrt.cpp
   libhooks.cpp
+  debug_util.cpp
   )
 
 set(CILKPRACE_BITCODE_SOURCE
@@ -13,6 +15,7 @@ set(CILKPRACE_BITCODE_SOURCE
   cilkprace_csi.cpp
   cilkprace_csan.cpp
   libhooks.cpp
+  debug_util.cpp
   )
 
 include_directories(${CILKTOOLS_SOURCE_DIR}/include)

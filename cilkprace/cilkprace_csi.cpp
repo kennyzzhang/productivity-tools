@@ -1,6 +1,7 @@
 #include "cilkprace.h"
 
 extern std::unique_ptr<CilkpraceImpl_t> tool;
+extern bool HAS_INIT;
 
 inline unsigned worker_number() {
 #pragma clang diagnostic push
@@ -14,6 +15,7 @@ CILKTOOL_API void __csi_init() {
 
 CILKTOOL_API void __csi_unit_init(const char* const file_name,
                                   const instrumentation_counts_t counts) {
+  HAS_INIT = true;
 }
 
 CILKTOOL_API
@@ -56,7 +58,7 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
   //if (prop.is_read_before_write_in_bb)
   //  return;
   auto store = __csi_get_load_source_loc(load_id);
-  tool->register_read((uint64_t)addr, *store);
+  tool->register_read((uint64_t)addr, num_bytes, *store);
 #ifdef TRACE_CALLS
   outs_red << "LOAD ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 #endif
@@ -90,7 +92,7 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
 #endif
   //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   auto store = __csi_get_store_source_loc(store_id);
-  tool->register_write((uint64_t)addr, *store);
+  tool->register_write((uint64_t)addr, num_bytes, *store);
 #ifdef TRACE_CALLS
   outs_red << "WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 #endif

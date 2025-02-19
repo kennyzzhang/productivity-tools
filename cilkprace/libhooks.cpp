@@ -5,11 +5,47 @@
 #include <sys/stat.h>
 #include <utime.h>
 
-#include "cilksan_internal.h"
-#include "debug_util.h"
-#include "driver.h"
+#include <csi/csi.h>
 
-//Stack_t<std::pair<csi_id_t, MAAP_t>> MAAPs;
+#include "cilkprace.h"
+#include "stack.h"
+#include "csan.h"
+  
+
+extern std::unique_ptr<CilkpraceImpl_t> tool;
+
+extern Stack_t<std::pair<csi_id_t, MAAP_t>> MAAPs;
+bool HAS_INIT = false;
+#define CILKSAN_INITIALIZED HAS_INIT
+
+// FILE io used to print error messages
+FILE *err_io = stderr;
+
+/*
+#define START_HOOK(call_id)                                                    \
+  if (!HAS_INIT || !should_check())                                 \
+    return;                                                                    \
+  if (__builtin_expect(!call_pc[call_id], false))                              \
+    call_pc[call_id] = CALLERPC;                                               \
+  do {                                                                         \
+  } while (0)
+*/
+
+#define START_HOOK(call_id) 
+
+//TODO We haven't implemented this yet
+__attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
+  return true;
+  //return parallel_execution.back();
+}
+
+//FIXME We're overriding some locking info :)
+CILKSAN_API void __cilksan_end_atomic() { outs_red << "UNHANDLED ATOMIC END" << std::endl;};
+CILKSAN_API void __cilksan_begin_atomic() { outs_red << "UNHANDLED ATOMIC BEGIN" << std::endl;};
+
+//FIXME Bypass the allocs...
+CILKSAN_API void __cilksan_record_alloc(const void* ptr, size_t num_bytes) { outs_red << "UNHANDLED ALLOC" << std::endl;};
+CILKSAN_API void __cilksan_record_free(const void* ptr) { outs_red << "UNHANDLED FREE" << std::endl;};
 
 CILKSAN_API void __csan_default_libhook(const csi_id_t call_id,
                                         const csi_id_t func_id,
@@ -643,7 +679,7 @@ CILKSAN_API void __csan_llvm_stacksave(const csi_id_t call_id,
   if (!is_execution_parallel())
     return;
 
-  CilkSanImpl.advance_stack_frame((uintptr_t)sp);
+  tool->advance_stack_frame((uintptr_t)sp);
 }
 
 CILKSAN_API void __csan_llvm_stackrestore(const csi_id_t call_id,
@@ -658,7 +694,7 @@ CILKSAN_API void __csan_llvm_stackrestore(const csi_id_t call_id,
   if (!is_execution_parallel())
     return;
 
-  CilkSanImpl.restore_stack(call_id, (uintptr_t)sp);
+  tool->restore_stack(call_id, (uintptr_t)sp);
 }
 
 CILKSAN_API void
@@ -2353,6 +2389,7 @@ CILKSAN_API void __csan_gettimeofday(const csi_id_t call_id,
   if (!is_execution_parallel())
     return;
 
+  /*
   // Record the memory write to tv
   if (checkMAAP(tv_MAAPVal, MAAP_t::Ref)) {
     if (__builtin_expect(CilkSanImpl.locks_held(), false)) {
@@ -2366,7 +2403,9 @@ CILKSAN_API void __csan_gettimeofday(const csi_id_t call_id,
       CilkSanImpl.do_write<MAType_t::FNRW>(call_id, (uintptr_t)(&tv->tv_usec),
                                            sizeof(tv->tv_usec), 0);
     }
-  }
+  }*/
+  check_write_bytes(call_id, tv_MAAPVal, (uintptr_t)(&tv->tv_sec),  sizeof(tv->tv_sec));
+  check_write_bytes(call_id, tv_MAAPVal, (uintptr_t)(&tv->tv_usec), sizeof(tv->tv_usec));
 
   // TODO: Record the memory write when tz != nullptr.  tz is deprecated,
   // however, and in practice it should be null.
