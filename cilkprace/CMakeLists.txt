@@ -5,12 +5,14 @@ set(CILKPRACE_SOURCES
   cilkprace_csi.cpp
   cilkprace_csan.cpp
   csirt.cpp
+  libhooks.cpp
   )
 
 set(CILKPRACE_BITCODE_SOURCE
   cilkprace.cpp
   cilkprace_csi.cpp
   cilkprace_csan.cpp
+  libhooks.cpp
   )
 
 include_directories(${CILKTOOLS_SOURCE_DIR}/include)

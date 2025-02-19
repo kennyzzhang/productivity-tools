@@ -19,6 +19,11 @@ enum class MAAP_t : uint8_t {
   NoAlias = 4,
 };
 
+extern Stack_t<std::pair<csi_id_t, MAAP_t>> MAAPs;
+/*static*/ inline bool checkMAAP(MAAP_t val, MAAP_t flag) {
+  return static_cast<uint8_t>(val) & static_cast<uint8_t>(flag);
+}
+
 CILKSAN_API void __csan_init() {
 }
 
@@ -30,23 +35,40 @@ CILKSAN_API
 void __csan_before_call(const csi_id_t call_id, const csi_id_t func_id, unsigned MAAP_count, const func_prop_t prop) {
 #ifdef TRACE_CALLS
   outs_red
-      << "[W" << worker_number() << "] func(fid=" << func_id << ", nsr="
+      << "[W" << worker_number() << "] before_call(fid=" << func_id << ", nsr="
       << prop.num_sync_reg << ", " << prop.may_spawn << ")" << std::endl;
   auto entry = __csi_get_func_source_loc(func_id);
   outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
 #endif
-  tool->enter_func(func_id, prop.may_spawn);
 }
 
 CILKSAN_API
 void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id, unsigned MAAP_count, const func_prop_t prop) {
 #ifdef TRACE_CALLS
   outs_red
-      << "[W" << worker_number() << "] func_exit(feid=" << func_id
+      << "[W" << worker_number() << "] after_call(feid=" << func_id
+      << ", fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
+#endif
+}
+
+ CILKSAN_API void __csan_func_entry(const csi_id_t func_id, __attribute__((noescape)) const void *bp, 
+                                  __attribute__((noescape)) const void *sp, const func_prop_t prop) {
+#ifdef TRACE_CALLS
+  outs_red << "[W" << worker_number() << "] func_entry(fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
+#endif
+  tool->enter_func(func_id, prop.may_spawn);
+
+}
+
+CILKSAN_API void __csan_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id, const func_exit_prop_t prop) {
+#ifdef TRACE_CALLS
+  outs_red
+      << "[W" << worker_number() << "] func_exit(feid=" << func_exit_id
       << ", fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
   tool->exit_func(func_id, prop.may_spawn);
 }
+
 
 CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
                            int32_t num_bytes, const load_prop_t prop) {
@@ -71,7 +93,49 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
 #endif
 }
 
+CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
+                           int32_t num_bytes, const load_prop_t prop) {
+#ifdef TRACE_CALLS
+  outs_red
+      << "[W" << worker_number() << "] before_load(lid=" << load_id << ", addr="
+      << addr << ", nb=" << num_bytes << ", align=" << prop.alignment
+      << ", vtab=" << prop.is_vtable_access << ", const=" << prop.is_constant
+      << ", stack=" << prop.is_on_stack << ", cap=" << prop.may_be_captured
+      << ", atomic=" << prop.is_atomic << ", threadlocal="
+      << prop.is_thread_local << ", basic_read_before_write="
+      << prop.is_read_before_write_in_bb << ")" << std::endl;
+#endif
+  // Putting this guard here shouldn't affect correctness but might make us faster
+  // As we filter out reads that are about to be writes anyway
+  //if (prop.is_read_before_write_in_bb)
+  //  return;
+  auto store = __csi_get_load_source_loc(load_id);
+  tool->register_read((uint64_t)addr, *store);
+#ifdef TRACE_CALLS
+  outs_red << "LOAD ON (" << store->name << ", " << store->line_number << ")" << std::endl;
+#endif
+}
+
 CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
+                             int32_t num_bytes, const store_prop_t prop) {
+#ifdef TRACE_CALLS
+  outs_red
+      << "[W" << worker_number() << "] before_store(sid=" << store_id
+      << ", addr=" << addr << ", nb=" << num_bytes << ", align="
+      << prop.alignment << ", vtab=" << prop.is_vtable_access << ", const="
+      << prop.is_constant << ", stack=" << prop.is_on_stack << ", cap="
+      << prop.may_be_captured << ", atomic=" << prop.is_atomic
+      << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
+#endif
+  //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
+  auto store = __csi_get_store_source_loc(store_id);
+  tool->register_write((uint64_t)addr, *store);
+#ifdef TRACE_CALLS
+  outs_red << "WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
+#endif
+}
+
+CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
                              int32_t num_bytes, const store_prop_t prop) {
 #ifdef TRACE_CALLS
   outs_red
@@ -136,6 +200,7 @@ void __csan_detach_continue(const csi_id_t detach_continue_id,
   tool->add_continue_frame();
 }
 
+CILKSAN_API
 void __csan_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 #ifdef TRACE_CALLS
   outs_red
@@ -206,8 +271,71 @@ CILKSAN_API void __csan_set_MAAP(MAAP_t val, csi_id_t id) {
   //if (!should_check())  
     //return; 
 #ifdef TRACE_CALLS
-  outs_red << "MAAP?" << std::endl;
+  outs_red << "SET MAAP?" << std::endl;
 #endif
 //  MAAPs.push_back(std::make_pair(id, val));
 }
+
+CILKSAN_API void __csan_get_MAAP(MAAP_t *ptr, csi_id_t id, unsigned idx) {
+  //if (!should_check())  
+    //return; 
+  //FIXME idk what this is
+#ifdef TRACE_CALLS
+  outs_red << "GET MAAP?" << std::endl;
+#endif
+  *ptr = MAAP_t::NoAccess;
+//  MAAPs.push_back(std::make_pair(id, val));
+}
+
+// This is what libhooks translates things in to
+// TODO
+// Helper function for checking a function that reads len bytes starting at ptr.
+inline void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
+                                    const void *ptr, size_t len) {
+  if (checkMAAP(MAAPVal, MAAP_t::Mod)) {
+    if (__builtin_expect(CilkSanImpl.locks_held(), false)) {
+      CilkSanImpl.do_locked_read<MAType_t::FNRW>(call_id, (uintptr_t)ptr, len,
+                                                 0);
+    } else {
+      CilkSanImpl.do_read<MAType_t::FNRW>(call_id, (uintptr_t)ptr, len, 0);
+    }
+  }
+}
+
+inline void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
+                                    uintptr_t ptr, size_t len) {
+  if (checkMAAP(MAAPVal, MAAP_t::Mod)) {
+    if (__builtin_expect(CilkSanImpl.locks_held(), false)) {
+      CilkSanImpl.do_locked_read<MAType_t::FNRW>(call_id, ptr, len, 0);
+    } else {
+      CilkSanImpl.do_read<MAType_t::FNRW>(call_id, ptr, len, 0);
+    }
+  }
+}
+
+// Helper function for checking a function that writes len bytes starting at
+// ptr.
+inline void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
+                                     const void *ptr, size_t len) {
+  if (checkMAAP(MAAPVal, MAAP_t::Ref)) {
+    if (__builtin_expect(CilkSanImpl.locks_held(), false)) {
+      CilkSanImpl.do_locked_write<MAType_t::FNRW>(call_id, (uintptr_t)ptr, len,
+                                                  0);
+    } else {
+      CilkSanImpl.do_write<MAType_t::FNRW>(call_id, (uintptr_t)ptr, len, 0);
+    }
+  }
+}
+
+inline void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
+                                     uintptr_t ptr, size_t len) {
+  if (checkMAAP(MAAPVal, MAAP_t::Ref)) {
+    if (__builtin_expect(CilkSanImpl.locks_held(), false)) {
+      CilkSanImpl.do_locked_write<MAType_t::FNRW>(call_id, ptr, len, 0);
+    } else {
+      CilkSanImpl.do_write<MAType_t::FNRW>(call_id, ptr, len, 0);
+    }
+  }
+}
+
 
