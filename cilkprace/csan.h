@@ -2,6 +2,7 @@
 #ifndef __CSAN_H__
 #define __CSAN_H__
 
+#include <csi/csi.h>
 #include <cstring>
 
 typedef struct {

@@ -1,7 +1,7 @@
 #pragma once
 #include <cilk/cilk_api.h>
 #include <csi/csi.h>
-#include <csan.h>
+#include "csan.h"
 
 #include "outs_red.h"
 #include "sstack.h"
@@ -63,6 +63,9 @@ public:
          // is not even default constructed unless explicitly constructed.
   {
     HAS_INIT = true;
+#ifdef TRACE_CALLS
+    outs_red << "HAS INIT" << std::endl;
+#endif
   }
 
   ~CilkpraceImpl_t() {}

@@ -30,9 +30,6 @@ void __csan_before_call(const csi_id_t call_id, const csi_id_t func_id, unsigned
   outs_red
       << "[W" << worker_number() << "] before_call(fid=" << func_id << ", nsr="
       << prop.num_sync_reg << ", " << prop.may_spawn << ")" << std::endl;
-  if (!HAS_INIT) return;
-  auto entry = (source_loc_t*) __csan_get_func_source_loc(func_id);
-  outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
 #endif
 }
 
@@ -50,6 +47,9 @@ void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id, unsigned 
 #ifdef TRACE_CALLS
   outs_red << "[W" << worker_number() << "] func_entry(fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
+  if (!HAS_INIT) return;
+  auto entry = (source_loc_t*) __csan_get_func_source_loc(func_id);
+  outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
   tool->enter_func(func_id, prop.may_spawn);
 
 }
@@ -205,6 +205,7 @@ void __csan_sync(const csi_id_t sync_id, const unsigned sync_reg) {
       << "[W" << worker_number() << "] before_sync(sid=" << sync_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
+  tool->enter_serial();
 }
 
 CILKSAN_API
