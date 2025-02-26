@@ -598,7 +598,14 @@ __csan_detach_continue(const csi_id_t detach_continue_id,
 }
 
 // Hook called at a sync
-CILKSAN_API void __csan_sync(csi_id_t sync_id, const unsigned sync_reg) {
+//TODO: We added before and after. It used to be before.
+// Does before vs after make a difference?
+CILKSAN_API void __csan_after_sync(csi_id_t sync_id, const unsigned sync_reg) {
+  return;
+}
+
+// Hook called at a sync
+CILKSAN_API void __csan_before_sync(csi_id_t sync_id, const unsigned sync_reg) {
   if (!CILKSAN_INITIALIZED)
     return;
 

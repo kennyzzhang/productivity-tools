@@ -14,7 +14,7 @@
 #include "outs_red.h"
 
 #define TRACE_CALLS 1
-//#undef TRACE_CALLS
+#undef TRACE_CALLS
 
 // helper type for the visitor #4
 template<class... Ts>
@@ -124,8 +124,8 @@ struct sp_frame_t {
     //TODO: consider incrmenting by more than 1. See register read and write
     for (uint64_t addr = (uint64_t)stack_info.low_sp; addr <= (uint64_t)stack_info.high_sp; addr += 1)
     {
-      //sw.erase(addr);
-      //sr.erase(addr);
+      sw.erase(addr);
+      sr.erase(addr);
     }
   }
 };

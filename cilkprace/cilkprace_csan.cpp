@@ -199,10 +199,19 @@ void __csan_detach_continue(const csi_id_t detach_continue_id,
 }
 
 CILKSAN_API
-void __csan_sync(const csi_id_t sync_id, const unsigned sync_reg) {
+void __csan_before_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 #ifdef TRACE_CALLS
   outs_red
       << "[W" << worker_number() << "] before_sync(sid=" << sync_id << ", sr="
+      << sync_reg << ")" << std::endl;
+#endif
+}
+
+CILKSAN_API
+void __csan_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
+#ifdef TRACE_CALLS
+  outs_red
+      << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
   tool->enter_serial();

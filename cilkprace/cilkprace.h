@@ -7,7 +7,7 @@
 #include "sstack.h"
 
 #define TRACE_CALLS 1
-//#undef TRACE_CALLS
+#undef TRACE_CALLS
 
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
 #define CILKSAN_API extern "C" __attribute__((visibility("default")))
@@ -102,7 +102,7 @@ public:
     multimap_t collisions;
     stack.join(collisions);
     if (!collisions.empty())
-      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl << collisions << std::endl << std::endl;
+      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl /*<< collisions*/ << std::endl << std::endl;
   }
   void add_sp_frame() {
     //stack.add_sp_frame();
@@ -114,7 +114,7 @@ public:
     multimap_t collisions;
     stack.enter_serial(collisions);
     if (!collisions.empty())
-      outs_red << "\nRACE CONDITION DURING SYNC" << std::endl << collisions << std::endl << std::endl;
+      outs_red << "\nRACE CONDITION DURING SYNC" << std::endl /*<< collisions*/ << std::endl << std::endl;
   }
 };
 // Stack structures for keeping track of MAAP (May Access Alias in Parallel)
