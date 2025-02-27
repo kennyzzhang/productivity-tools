@@ -49,7 +49,7 @@ void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id, unsigned 
 #endif
   if (!HAS_INIT) return;
   auto entry = (source_loc_t*) __csan_get_func_source_loc(func_id);
-  outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
+  //outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
   tool->enter_func(func_id, prop.may_spawn);
 
 }
@@ -351,5 +351,23 @@ void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
 void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
                                      const void *ptr, size_t len) {
     check_write_bytes(call_id, MAAPVal, (uintptr_t) ptr, len);
+}
+
+
+// outside world (including runtime).
+// Non-inlined version for user code to use
+CILKSAN_API void __cilksan_enable_checking(void) {
+  outs_red << "UNHANDLED ENABLE CHECKING" << std::endl;
+  //checking_disabled--;  
+  //cilksan_assert(checking_disabled >= 0);
+  //DBG_TRACE(BASIC, "External enable checking (%d).\n", checking_disabled);
+}
+
+// Non-inlined version for user code to use
+CILKSAN_API void __cilksan_disable_checking(void) {
+  outs_red << "UNHANDLED DISABLE CHECKING" << std::endl;
+  //cilksan_assert(checking_disabled >= 0);
+  //checking_disabled++;
+  //DBG_TRACE(BASIC, "External disable checking (%d).\n", checking_disabled);
 }
 

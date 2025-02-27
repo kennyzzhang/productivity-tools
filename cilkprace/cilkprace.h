@@ -87,7 +87,9 @@ public:
   }
   void enter_func(const csi_id_t func_id, const bool may_spawn) {
     if (may_spawn)
+    {
       stack.push_boundary(func_id);
+    }
   }
   void exit_func(const csi_id_t func_id, const bool may_spawn) {
     if (may_spawn)

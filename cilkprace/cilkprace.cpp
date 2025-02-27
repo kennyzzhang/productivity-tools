@@ -1,6 +1,5 @@
 #include "cilkprace.h"
 
-
 std::unique_ptr<std::ofstream> outf;
 #ifndef OUTS_CERR
 cilk::ostream_reducer<char> outs_red([]() -> std::basic_ostream<char>& {

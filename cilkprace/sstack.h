@@ -239,10 +239,16 @@ public:
   }
 
   task_t push_task(const csi_id_t task_id) {
+    #ifdef TRACE_CALLS
+    outs_red << "+task" << std::endl;
+    #endif
     frames.emplace_back(std::in_place_type<task_t>, task_id);
     return std::get<task_t>(frames.back());
   }
   boundary_t push_boundary(const csi_id_t func_id) {
+    #ifdef TRACE_CALLS
+    outs_red << "+boundary" << std::endl;
+    #endif
     int lookback = 1;
     if (!frames.empty() && std::holds_alternative<boundary_t>(back()))
       lookback += std::get<boundary_t>(back()).nonboundary_lookback;
@@ -251,11 +257,17 @@ public:
     return std::get<boundary_t>(frames.back());
   }
   continue_t push_continue() {
+    #ifdef TRACE_CALLS
+    outs_red << "+continue" << std::endl;
+    #endif
     frames.emplace_back(std::in_place_type<continue_t>);
     return std::get<continue_t>(frames.back());
   }
 
   frame_t pop() {
+    #ifdef TRACE_CALLS
+    outs_red << "-frame" << std::endl;
+    #endif
     assert(!frames.empty() && "Trying to pop() from empty shadow sp stack!");
     auto ret = frames.back();
     frames.pop_back();
@@ -264,7 +276,8 @@ public:
 
   void pop_boundary(const csi_id_t func_id) {
    assert(std::holds_alternative<boundary_t>(back()) && "Expected boundary frame in may_spawn function exit!");
-   assert(std::get<boundary_t>(pop()).func_id == func_id && "Expected matching function id for boundary frame on function exit");
+   assert(std::get<boundary_t>(back()).func_id == func_id && "Expected matching function id for boundary frame on function exit");
+    pop();
   }
 
   frame_t& back() {
@@ -355,12 +368,12 @@ public:
   
     return collisions.empty();
   } 
-  
+
   // Merges oth with the current stack frame as if they occurred in parallel.
   // Returns true if the two stack frames are disjoint
   bool join(multimap_t& collisions) {
 #ifdef TRACE_CALLS
-    outs_red << "join" << std::endl;
+    outs_red << "join: " << frames.size() << std::endl;
 #endif
     // Grab that fork's frame
     assert(std::holds_alternative<task_t>(back()) && "Expected task frame in join!");
