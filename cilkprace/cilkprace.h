@@ -5,6 +5,7 @@
 
 #include "outs_red.h"
 #include "sstack.h"
+#include "stack.h"
 
 #define TRACE_CALLS 1
 #undef TRACE_CALLS
@@ -13,6 +14,29 @@
 #define CILKSAN_API extern "C" __attribute__((visibility("default")))
 
 extern bool HAS_INIT;
+
+
+// Stack structures for keeping track of MAAP (May Access Alias in Parallel)
+// information inserted by the compiler before a call.
+enum class MAAP_t : uint8_t {
+  NoAccess = 0,
+  Mod = 1,
+  Ref = 2,
+  ModRef = Mod | Ref,
+  NoAlias = 4,
+};
+
+
+using MAAPstack = Stack_t<std::pair<csi_id_t, MAAP_t>>;
+using ustack = Stack_t<unsigned>;
+
+void init_MAAPstack (void* view);
+void reduce_MAAPstack (void* left_view, void* right_view);
+void init_ustack(void* view);
+void reduce_ustack (void* left_view, void* right_view);
+
+typedef MAAPstack cilk_reducer(init_MAAPstack, reduce_MAAPstack) MAAPstack_reducer;
+typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
 
 class CilkpraceImpl_t {
 public:
@@ -119,16 +143,7 @@ public:
       outs_red << "\nRACE CONDITION DURING SYNC" << std::endl /*<< collisions*/ << std::endl << std::endl;
   }
 };
-// Stack structures for keeping track of MAAP (May Access Alias in Parallel)
-// information inserted by the compiler before a call.
-enum class MAAP_t : uint8_t {
-  NoAccess = 0,
-  Mod = 1,
-  Ref = 2,
-  ModRef = Mod | Ref,
-  NoAlias = 4,
-};
-
+//FIXME: Hardcoded for now
 __attribute__((always_inline)) /*static*/ inline bool should_check() {
   return true;
 }

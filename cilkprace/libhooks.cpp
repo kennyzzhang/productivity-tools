@@ -14,7 +14,7 @@
 
 extern std::unique_ptr<CilkpraceImpl_t> tool;
 
-extern Stack_t<std::pair<csi_id_t, MAAP_t>> MAAPs;
+extern MAAPstack MAAPs;
 bool HAS_INIT = false;
 #define CILKSAN_INITIALIZED HAS_INIT
 
