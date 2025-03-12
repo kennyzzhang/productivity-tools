@@ -29,14 +29,28 @@ enum class MAAP_t : uint8_t {
 
 using MAAPstack = Stack_t<std::pair<csi_id_t, MAAP_t>>;
 using ustack = Stack_t<unsigned>;
+using pstack = Stack_t<uint8_t>;
+
+
 
 void init_MAAPstack (void* view);
 void reduce_MAAPstack (void* left_view, void* right_view);
 void init_ustack(void* view);
 void reduce_ustack (void* left_view, void* right_view);
+void init_pstack(void* view);
+void reduce_pstack (void* left_view, void* right_view);
 
 typedef MAAPstack cilk_reducer(init_MAAPstack, reduce_MAAPstack) MAAPstack_reducer;
 typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
+typedef pstack cilk_reducer(init_pstack, reduce_pstack) pstack_reducer;
+
+
+extern pstack_reducer parallel_execution;
+
+//FIXME
+__attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
+  return true; //parallel_execution.back();
+}
 
 class CilkpraceImpl_t {
 public:
@@ -90,6 +104,11 @@ public:
 #ifdef TRACE_CALLS
     outs_red << "HAS INIT" << std::endl;
 #endif
+    // Note that we start executing the program in series.
+    //parallel_execution.push_back(0);
+    // Push a default value of 0 onto the MAAP_counts stack, in case this
+    // function contains get_MAAP calls.
+    //MAAP_counts.push_back(0);
   }
 
   ~CilkpraceImpl_t() {}
@@ -145,7 +164,7 @@ public:
 };
 //FIXME: Hardcoded for now
 __attribute__((always_inline)) /*static*/ inline bool should_check() {
-  return true;
+  return HAS_INIT;
 }
 
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal, uintptr_t ptr, size_t len);

@@ -33,12 +33,6 @@ FILE *err_io = stderr;
 
 #define START_HOOK(call_id) 
 
-//TODO We haven't implemented this yet
-__attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
-  return true;
-  //return parallel_execution.back();
-}
-
 //FIXME We're overriding some locking info :)
 CILKSAN_API void __cilksan_end_atomic() { outs_red << "UNHANDLED ATOMIC END" << std::endl;};
 CILKSAN_API void __cilksan_begin_atomic() { outs_red << "UNHANDLED ATOMIC BEGIN" << std::endl;};
