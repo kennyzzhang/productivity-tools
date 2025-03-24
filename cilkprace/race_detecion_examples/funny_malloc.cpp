@@ -79,31 +79,39 @@ int main() {
 // CASE 0: Race between malloc and free
 // Lesson: Is asan a good base for assumption? Not really.
   int* arr;
-  cilk_spawn parallel_malloc(arr);
-  cilk_spawn parallel_free(arr);
-  cilk_sync;
-  return 0;
+  if (false) {
+    cilk_spawn parallel_malloc(arr);
+    cilk_spawn parallel_free(arr);
+    cilk_sync;
+    return 0;
+  }
 
-// CASE 1: Race between free and write
-// Lesson: Frees count as writes
-// Lesson2: Cilksan doesn't catch this >:3
-// Lesson3: asan doesn't catch this >>:33 (it does if you swap f and g's call order)
-  arr = (int*)malloc(sizeof(int) * size);
-  cilk_spawn g(arr);
-  cilk_spawn f(arr);
-  cilk_sync;
-  return 0;
-// CASE 2: Non-race between two mallocs that return the same
-// Lesson: Eventually clear memory accesses of freed memory, because frees can happen in parallel with mallocs
-  cilk_spawn stuff();
-  cilk_spawn stuff();
-  cilk_sync;
+  // CASE 1: Race between free and write
+  // Lesson: Frees count as writes
+  // Lesson2: Cilksan doesn't catch this >:3
+  // Lesson3: asan doesn't catch this >>:33 (it does if you swap f and g's call order)
+  if (false) {
+    arr = (int*)malloc(sizeof(int) * size);
+    cilk_spawn g(arr);
+    cilk_spawn f(arr);
+    cilk_sync;
+    return 0;
+  }
+  // CASE 2: Non-race between two mallocs that return the same
+  // Lesson: Eventually clear memory accesses of freed memory, because frees can happen in parallel with mallocs
+  if (false) {
+    cilk_spawn stuff();
+    cilk_spawn stuff();
+    cilk_sync;
+    return 0;
+  }
 
-// CASE 3: Race between free and write hidden by mallocs
-// Lesson: :(
-  arr = (int*)malloc(sizeof(int) * size);
-  cilk_spawn g_stuff(arr);
-  cilk_spawn f_stuff(arr);
-  cilk_sync;
-
+  // CASE 3: Race between free and write hidden by mallocs
+  // Lesson: :(
+  if (false) {
+    arr = (int*)malloc(sizeof(int) * size);
+    cilk_spawn g_stuff(arr);
+    cilk_spawn f_stuff(arr);
+    cilk_sync;
+  }
 }
