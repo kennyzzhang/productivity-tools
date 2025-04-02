@@ -7,6 +7,7 @@ int constexpr size = 1 << 10;
 __attribute__((noinline))
 void f(int* ptr) {
   free(ptr); 
+
   for (int i = 0; i < 1000; i++)
     i = i;
   std::cout << "fffffffffffffffff" << std::endl;
@@ -15,6 +16,7 @@ void f(int* ptr) {
 __attribute__((noinline))
 void g(int * ptr) {
   ptr[size/2] = 7;
+
   for (int i = 0; i < 1000; i++)
     i = i;
   std::cout << "ggggggggggggggggg" << std::endl;
@@ -90,7 +92,7 @@ int main() {
   // Lesson: Frees count as writes
   // Lesson2: Cilksan doesn't catch this >:3
   // Lesson3: asan doesn't catch this >>:33 (it does if you swap f and g's call order)
-  if (false) {
+  if (true) {
     arr = (int*)malloc(sizeof(int) * size);
     cilk_spawn g(arr);
     cilk_spawn f(arr);

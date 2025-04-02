@@ -14,5 +14,6 @@ int main() {
     arr2[2] = 91;
     free(arr);
     delete[] arr2;
-  }
+    // DO MORE STUFF
+  }   
 }
