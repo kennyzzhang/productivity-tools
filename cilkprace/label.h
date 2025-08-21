@@ -11,6 +11,8 @@ constexpr size_t min_len = 2;
 
 //TODO: Clang vector type? Good way to manipulate bitset with harware parallelism?
 
+//TODO: Funny indexign hacks. 2 indexing? Assuming min length?
+
 using bitset = uint64_t[os_length/64];
 
 class os_label
