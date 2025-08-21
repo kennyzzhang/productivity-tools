@@ -334,6 +334,8 @@ public:
     // Accumulate all of the children into the parallel sets 
     while(frames.size() >= 2 && std::holds_alternative<continue_t>(back()))
     {
+      //TODO: Templatize this to reuse for continue and task frames?
+      
       continue_t oth = std::get<continue_t>(pop());
       // The other stack contains its accesses in the serial set and parallel set
       auto& into = backmost_nonboundary();

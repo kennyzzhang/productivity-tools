@@ -21,6 +21,8 @@ bool HAS_INIT = false;
 // FILE io used to print error messages
 FILE *err_io = stderr;
 
+
+//TODO: reanable this?
 /*
 #define START_HOOK(call_id)                                                    \
   if (!HAS_INIT || !should_check())                                 \
