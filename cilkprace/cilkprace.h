@@ -6,6 +6,7 @@
 #include "outs_red.h"
 #include "sstack.h"
 #include "stack.h"
+#include "label.h"
 
 #define TRACE_CALLS 1
 #undef TRACE_CALLS
