@@ -43,6 +43,13 @@ static uint64_t count_nibbles(uint64_t buffer)
   return length_nibbles;
 }
 
+static uint64_t pack_nibbles(uint64_t n1, uint64_t n2)
+{
+    int nibbles_needed =  (64 - __builtin_clzll(n2)+3)/4;
+    return (n1 << (nibbles_needed * 4)) | n2;
+}
+
+
 static uint64_t extract_data(uint64_t buffer, uint64_t len_bits)
 {
     // Extract raw data to read
@@ -55,9 +62,6 @@ static uint64_t extract_data(uint64_t buffer, uint64_t len_bits)
 
 static uint64_t decode_from_nibbles(uint64_t buffer)
 {
-  // Left shift the buffer such that the leftmost nibble is readable
-  buffer <<= (__builtin_clzll(buffer)/4) * 4;
-
   uint64_t length_nibbles = count_nibbles(buffer);
 
   uint64_t length_bits = length_nibbles *3;
@@ -69,29 +73,26 @@ static uint64_t decode_from_nibbles(uint64_t buffer)
 
 static bool less_nibble(uint64_t n1, uint64_t n2)
 {
-    n1 <<= __builtin_clzll(n1);
-    n2 <<= __builtin_clzll(n2);
-
     return n1 < n2;
 }
 
 static uint64_t lca_nibble(uint64_t n1, uint64_t n2)
 {
-    n1 <<= __builtin_clzll(n1);
-    n2 <<= __builtin_clzll(n2);
-
     uint64_t diff = n1 ^ n2;
     if (diff == 0) return n1;
 
     int num_left_matching_nibbles = __builtin_clzll(diff) / 4;
-    int nibbles = count_nibbles(n1);
-
-    // TODO: Mask off instead of all this shifting?
-
-    if (nibbles == num_left_matching_nibbles) 
-        return n1 >> (64 - nibbles*4);
-        return lca_nibble(n1 << (nibbles * 4), n2 << (nibbles *4));
-
+    int num_right_different_nibbles = 16 - num_left_matching_nibbles;
+    
+    
+    uint64_t matching_mask = ~((1ull << (num_right_different_nibbles*4))-1);
+    // Mask away rest of number
+    uint64_t matching_number = n1 & matching_mask;
+    // & away data
+    uint64_t matching_metadata = _pext_u64(matching_number, nibble_metadata);
+    uint64_t run_of_ones = matching_metadata >> __builtin_ctzll(matching_metadata);
+    uint64_t bit_extractor = run_of_ones >> __builtin_ctzll(~run_of_ones);
+    return __builtin_clzll(bit_extractor)-48;
 }
 
 #include <iostream>
@@ -99,21 +100,42 @@ static uint64_t lca_nibble(uint64_t n1, uint64_t n2)
 
 int main()
 {
+    
     srand(time(NULL));
-    uint64_t num1 = rand();
-    uint64_t num2 = rand();
+    uint64_t num1 = rand() % 10000;
+    uint64_t num2 = rand() % 10000;
+    uint64_t num3 = rand() % 10000; 
+
     uint64_t encoded1 = encode_to_nibbles(num1);
     uint64_t encoded2 = encode_to_nibbles(num2);
+    uint64_t prefix = encode_to_nibbles(num3);
+
+    encoded1 = pack_nibbles(prefix, encoded1);
+    encoded2 = pack_nibbles(prefix, encoded2);
+
+    // Left shift the buffer such that the leftmost nibble is readable
+    encoded1 <<= (__builtin_clzll(encoded1)/4) * 4;
+    encoded2 <<= (__builtin_clzll(encoded2)/4) * 4;
+    prefix <<= (__builtin_clzll(prefix)/4) * 4;
+
     uint64_t decoded1 = decode_from_nibbles(encoded1);
     uint64_t decoded2 = decode_from_nibbles(encoded2);
 
     std::cout << num1 << " < " << num2 << "? " << (num1 < num2 ? "YES" : "NO") << std::endl;
+    std::cout << "PREFIX   : " << num3 << std::endl;
     std::cout << "ENCODED 1: " << std::bitset<8*sizeof(encoded1)>(encoded1) << std::endl;
     std::cout << "ENCODED 2: " << std::bitset<8*sizeof(encoded2)>(encoded2) << std::endl;
-    
-    std::cout << "LCA: " << lca_nibble(encoded1, encoded2) << std::endl;
+
+    std::cout << std::endl;
+
+    std::cout << "PREFIX   : " << std::bitset<8*sizeof(prefix)>(prefix) << std::endl;
+    std::cout << "LCA      : " << std::bitset<8*sizeof(encoded2)>(lca_nibble(encoded1, encoded2)) << std::endl;
+    std::cout << "LCA      : " << lca_nibble(encoded1, encoded2) << std::endl;
+
+    std::cout << std::endl;
 
     std::cout << "DECODED 1: " << std::bitset<8*sizeof(encoded1)>(decoded1) << std::endl;
     std::cout << "DECODED 2: " << std::bitset<8*sizeof(encoded2)>(decoded2) << std::endl;
     std::cout << num1 << " < " << num2 << "? " << (less_nibble(encoded1, encoded2) ? "YES" : "NO") << std::endl;
 }
+
