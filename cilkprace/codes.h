@@ -1,16 +1,69 @@
+#include <stdint.h>
+
+#include <bitset>
+#include <iostream>
+
 #include <cstddef>
 #include <cstdint>
 #include <cassert>
+#include <cstring>
 #include <immintrin.h>
 
 constexpr size_t code_max_length = 512;
-constexpr size_t code_nbytes = code_max_length/64;
+constexpr size_t code_nbytes = code_max_length/8;
 
-using bitset = uint64_t[code_nbytes];
+using bitset = uint8_t[code_nbytes];
 
 static constexpr uint64_t nibble_spread = 0x7777777777777777ull;
 static constexpr uint64_t nibble_metadata = ~nibble_spread;
 
+static uint64_t extract_nibbles_from_bitset(const bitset& bits, size_t left_offset)
+{
+    // overflow protection
+    size_t overflow_shift = 0;
+    if (left_offset*4 >= code_max_length)
+        return 0;
+    if (left_offset*4 + 64 >= code_max_length)
+    {
+        overflow_shift = left_offset*4 + 64 - code_max_length;
+        left_offset = (code_max_length - 64) / 4;
+    }
+    // Since we're indexing nibbles, 2 nibbles = 1 byte of index
+    // and an odd number of nibbles requires a bitshift by 4
+    // before a cast down
+    size_t shift = (left_offset % 2) * 4;
+    left_offset /=2;
+
+    uint64_t data = *(uint64_t*)&bits[code_nbytes - 8 - left_offset];
+    uint64_t next_data = *(uint64_t*)&bits[code_nbytes - 8 - left_offset -1];
+    return ((data << shift) | (next_data >> (64 - shift))) << overflow_shift;
+}
+
+static size_t append_right_nibbles_to_bitset(uint64_t what, bitset& bits, size_t left_offset)
+{
+    // Left-align the nibbles
+    size_t unused_left_nibbles = __builtin_clzll(what)/4;
+    size_t len_nibbles = 16 - unused_left_nibbles;
+
+    what <<= unused_left_nibbles*4;
+
+    // overflow protection
+    assert (left_offset*4 < code_max_length);
+    assert (left_offset*4 + len_nibbles*4 <= code_max_length);
+
+    // Since we're indexing nibbles, 2 nibbles = 1 byte of index
+    // and an odd number of nibbles requires a bitshift by 4
+    // before a cast down
+    size_t shift = (left_offset % 2) * 4;
+    left_offset /=2;
+
+    uint64_t* data = (uint64_t*)&bits[(code_nbytes - 8) - left_offset];
+    uint64_t* next_data = (uint64_t*)&bits[code_nbytes - 8 - left_offset -1];
+    *data |= what >> shift;
+    if (shift)
+        *next_data |= (what % 16) << 4;
+    return len_nibbles;
+}
 
 static uint64_t encode_to_nibbles(uint64_t num)
 {
@@ -71,6 +124,44 @@ static uint64_t decode_from_nibbles(uint64_t buffer)
   return data - 1;
 }
 
+static void lca_nibble(const bitset& _b1, const bitset& _b2, bitset& _into)
+{
+    const uint64_t* b1 = (const uint64_t*)_b1;
+    const uint64_t* b2 = (const uint64_t*)_b2;
+    uint64_t* into = (uint64_t*)_into;
+
+    int num_left_matching_nibbles = 0;
+    for (int i = code_nbytes/8-1; i >=0; i--)
+    {
+        into[i] = b1[i] ^ b2[i];
+        if (into[i] == 0)
+            num_left_matching_nibbles += 16;
+        else
+        {
+            num_left_matching_nibbles += __builtin_clzll(into[i])/4;
+            break;
+        }
+    }
+    if (num_left_matching_nibbles == code_nbytes * 2)
+    {
+        memcpy(_into, _b1, code_nbytes);
+        return;
+    }
+    
+    while(true)
+    {
+        //FIXME there has to be a simpler way to say this
+        int num_right_matching_ints = code_nbytes/8 - num_left_matching_nibbles / 16;
+        int num_right_matching_internal_nibbles = 16 - (num_left_matching_nibbles % 16);
+        uint64_t bit = 1ull << (num_right_matching_internal_nibbles*4 +3);
+
+        // FIXME: Check this code for off--by-1, errors, etc etc
+        if (bit & b1[num_right_matching_ints])
+            num_left_matching_nibbles--;
+    }
+
+}
+
 static uint64_t lca_nibble(uint64_t n1, uint64_t n2)
 {
     uint64_t diff = n1 ^ n2;
@@ -103,16 +194,23 @@ static uint64_t lca_nibble(uint64_t n1, uint64_t n2)
 
 #include <iostream>
 #include <bitset>
+#include <iomanip>
+
+static void cout_bitset(bitset& bs)
+{
+    for (int i = code_nbytes-1; i >= 0; i--)
+        std::cout << std::setfill('0') << std::setw(2) << std::hex << (uint16_t)bs[i];
+    std::cout << std::endl;
+}
 
 int main()
 {
-    
     srand(time(NULL));
-    uint64_t num1 = rand() % 10000;
-    uint64_t num2 = rand() % 10000;
-    uint64_t num3 = rand() % 10000; 
+    uint64_t num1 = rand() % 1000;
+    uint64_t num2 = rand() % 1000;
+    uint64_t num3 = rand() % 1000; 
     uint64_t num4 = rand() % 100; 
-    uint64_t num5 = rand() % 1000;
+    uint64_t num5 = rand() % 10;
 
     uint64_t encoded1 = encode_to_nibbles(num1);
     uint64_t encoded2 = encode_to_nibbles(num2);
@@ -123,10 +221,35 @@ int main()
     encoded1 = pack_nibbles(prefix, encoded1);
     encoded2 = pack_nibbles(prefix, encoded2);
 
-    // Left shift the buffer such that the leftmost nibble is readable
-    encoded1 <<= (__builtin_clzll(encoded1)/4) * 4;
-    encoded2 <<= (__builtin_clzll(encoded2)/4) * 4;
-    prefix <<= (__builtin_clzll(prefix)/4) * 4;
+    bitset b1 = {0};
+    bitset b2 = {0};
+
+    size_t offset = 0;
+
+    encoded1 = (0xfa0980909b93ull);
+    encoded2 = (0xfa098090c6ull);
+
+    offset = append_right_nibbles_to_bitset(encoded1, b1, 0);
+    offset += append_right_nibbles_to_bitset(encoded2, b1, offset);
+    
+    offset = append_right_nibbles_to_bitset(encoded1, b2, 0);
+    offset += append_right_nibbles_to_bitset(encoded1, b2, offset);
+
+
+//
+//
+    //FIXME
+    std::cout << "ENCODED 1/2" << std::endl;
+    cout_bitset(b1);
+    std::cout << "ENCODED 1/1" << std::endl;
+    cout_bitset(b2);
+
+    std::cout << "LCA" << std::endl;
+    bitset b3 = {0};
+    lca_nibble(b1, b2, b3);
+    cout_bitset(b3);
+
+    std::cout << "uint64_t" << std::endl << std::endl << std::endl;
 
     uint64_t decoded1 = decode_from_nibbles(encoded1);
     uint64_t decoded2 = decode_from_nibbles(encoded2);
@@ -145,4 +268,15 @@ int main()
 
     std::cout << "DECODED 1: " << std::bitset<8*sizeof(encoded1)>(decoded1) << std::endl;
     std::cout << "DECODED 2: " << std::bitset<8*sizeof(encoded2)>(decoded2) << std::endl;
+
+    std::cout << std::endl;
+
+    bitset bs;
+    for (int i = 0; i < code_nbytes; i++)
+        bs[i] = i % 256;
+    cout_bitset(bs);
+    std::cout << std::endl;
+    std::cout << "EXTRACT : " << std::hex << extract_nibbles_from_bitset(bs, 124) << std::endl;
+
 }
+
