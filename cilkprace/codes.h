@@ -142,24 +142,34 @@ static void lca_nibble(const bitset& _b1, const bitset& _b2, bitset& _into)
             break;
         }
     }
+    // Handle exact match
     if (num_left_matching_nibbles == code_nbytes * 2)
     {
         memcpy(_into, _b1, code_nbytes);
         return;
     }
-    
+     
+    // We know there's a difference. 
+    // We have to back up until we find the end of the previous integer
     while(true)
     {
-        //FIXME there has to be a simpler way to say this
-        int num_right_matching_ints = code_nbytes/8 - num_left_matching_nibbles / 16;
-        int num_right_matching_internal_nibbles = 16 - (num_left_matching_nibbles % 16);
-        uint64_t bit = 1ull << (num_right_matching_internal_nibbles*4 +3);
+        int right_matching_nibbles = (code_nbytes*2) - num_left_matching_nibbles;
+        int word_index = right_matching_nibbles / 16;
+        int nibble_index = right_matching_nibbles % 16;
+        uint64_t bit = 1ull << (nibble_index*4 + 3);
 
-        // FIXME: Check this code for off--by-1, errors, etc etc
-        if (bit & b1[num_right_matching_ints])
+        if (bit & b1[word_index])
             num_left_matching_nibbles--;
+        else
+          break;
     }
-
+    
+    int matching_bytes = num_left_matching_nibbles / 2;
+    memset(_into, 0, code_nbytes);
+    memcpy(_into + code_nbytes - matching_bytes, _b1 + code_nbytes - matching_bytes, matching_bytes);
+    // And handle a stray nibble 
+    if (num_left_matching_nibbles % 2)
+      _into[code_nbytes - matching_bytes -1] |= _b1[code_nbytes - matching_bytes -1] & 0xF0;
 }
 
 static uint64_t lca_nibble(uint64_t n1, uint64_t n2)
@@ -226,8 +236,8 @@ int main()
 
     size_t offset = 0;
 
-    encoded1 = (0xfa0980909b93ull);
-    encoded2 = (0xfa098090c6ull);
+//    encoded1 = (0xfa0980909b93ull);
+//    encoded2 = (0xfa098090c6ull);
 
     offset = append_right_nibbles_to_bitset(encoded1, b1, 0);
     offset += append_right_nibbles_to_bitset(encoded2, b1, offset);
