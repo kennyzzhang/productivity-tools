@@ -212,7 +212,7 @@ static void cout_bitset(bitset& bs)
         std::cout << std::setfill('0') << std::setw(2) << std::hex << (uint16_t)bs[i];
     std::cout << std::endl;
 }
-
+/*
 int main()
 {
     srand(time(NULL));
@@ -289,4 +289,4 @@ int main()
     std::cout << "EXTRACT : " << std::hex << extract_nibbles_from_bitset(bs, 124) << std::endl;
 
 }
-
+*/
