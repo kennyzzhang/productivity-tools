@@ -14,6 +14,7 @@ constexpr size_t code_nbytes = code_max_length/8;
 
 using bitset = uint8_t[code_nbytes];
 
+
 static constexpr uint64_t nibble_spread = 0x7777777777777777ull;
 static constexpr uint64_t nibble_metadata = ~nibble_spread;
 
@@ -124,11 +125,12 @@ static uint64_t decode_from_nibbles(uint64_t buffer)
   return data - 1;
 }
 
-static void lca_nibble(const bitset& _b1, const bitset& _b2, bitset& _into)
+static int lca_nibble(const bitset& _b1, const bitset& _b2, bitset& _into)
 {
     const uint64_t* b1 = (const uint64_t*)_b1;
     const uint64_t* b2 = (const uint64_t*)_b2;
     uint64_t* into = (uint64_t*)_into;
+    memset(_into, 0, code_nbytes);
 
     int num_left_matching_nibbles = 0;
     for (int i = code_nbytes/8-1; i >=0; i--)
@@ -146,13 +148,16 @@ static void lca_nibble(const bitset& _b1, const bitset& _b2, bitset& _into)
     if (num_left_matching_nibbles == code_nbytes * 2)
     {
         memcpy(_into, _b1, code_nbytes);
-        return;
+        return -1;
     }
      
     // We know there's a difference. 
     // We have to back up until we find the end of the previous integer
     while(true)
     {
+        if (num_left_matching_nibbles == 0)
+          return 0;
+
         int right_matching_nibbles = (code_nbytes*2) - num_left_matching_nibbles;
         int word_index = right_matching_nibbles / 16;
         int nibble_index = right_matching_nibbles % 16;
@@ -165,11 +170,11 @@ static void lca_nibble(const bitset& _b1, const bitset& _b2, bitset& _into)
     }
     
     int matching_bytes = num_left_matching_nibbles / 2;
-    memset(_into, 0, code_nbytes);
     memcpy(_into + code_nbytes - matching_bytes, _b1 + code_nbytes - matching_bytes, matching_bytes);
     // And handle a stray nibble 
     if (num_left_matching_nibbles % 2)
       _into[code_nbytes - matching_bytes -1] |= _b1[code_nbytes - matching_bytes -1] & 0xF0;
+    return num_left_matching_nibbles;
 }
 
 static uint64_t lca_nibble(uint64_t n1, uint64_t n2)
