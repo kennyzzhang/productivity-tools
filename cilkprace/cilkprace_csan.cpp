@@ -11,45 +11,13 @@ inline unsigned worker_number() {
 #pragma clang diagnostic pop
 }
 
-// Stack structures for keeping track of MAAPs for pointer arguments to function calls
-void init_MAAPstack (void* view) {
-  #if TRACE_CALLS
-    std::cerr << "init MAAPSTACK" << std::endl;
-  #endif
-  new (view) MAAPstack();
-}
-void reduce_MAAPstack (void* left_view, void* right_view) {
-  #if TRACE_CALLS
-    std::cerr << "reduce MAAPSTACK" << std::endl;
-  #endif
-  MAAPstack *left = static_cast<MAAPstack*>(left_view);
-  MAAPstack *right = static_cast<MAAPstack*>(right_view);
-  assert(right->size() == 0 && "Expected empty MAAPstack!");
-  right->~MAAPstack();
-}
-
-void init_ustack(void* view) {
-  #if TRACE_CALLS
-    std::cerr << "init ustack" << std::endl;
-  #endif
-  new (view) ustack();
-}
-void reduce_ustack (void* left_view, void* right_view) {
-  #if TRACE_CALLS
-    std::cerr << "reduce ustack" << std::endl;
-  #endif
-  ustack *left = static_cast<ustack*>(left_view);
-  ustack *right = static_cast<ustack*>(right_view);
-  assert(right->size() == 0 && "Expected empty ustack!");
-  right->~ustack();
-}
-
 MAAPstack_reducer MAAPs;
 ustack_reducer MAAP_counts;
 
 /*static*/ inline bool checkMAAP(MAAP_t val, MAAP_t flag) {
   return static_cast<uint8_t>(val) & static_cast<uint8_t>(flag);
 }
+
 
 CILKSAN_API
 void __csan_init() {};

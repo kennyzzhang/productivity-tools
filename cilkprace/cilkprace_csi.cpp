@@ -10,6 +10,11 @@ inline unsigned worker_number() {
 #pragma clang diagnostic pop
 }
 
+/*static*/ inline bool checkMAAP(MAAP_t val, MAAP_t flag) {
+  return static_cast<uint8_t>(val) & static_cast<uint8_t>(flag);
+}
+
+
 CILKTOOL_API void __csi_init() {
 }
 

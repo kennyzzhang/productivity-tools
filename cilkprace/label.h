@@ -14,15 +14,16 @@ class os_label
   bool operator||(const os_label&& rhs) const
   {
     bitset scratch;
-    lca_nibble(labels, rhs, scratch);
+    lca_nibble(labels, rhs.labels, scratch);
     //FIXME
     return true;
   }
   
-  bitset operator&&(const os_label&& rhs) const
+  /*bitset operator&&(const os_label&& rhs) const
   {
     bitset scratch;
     lca_nibble(labels, rhs, scratch);
     return scratch;
+  */
 };
 

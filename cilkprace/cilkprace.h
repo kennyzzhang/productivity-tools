@@ -1,10 +1,9 @@
 #pragma once
-#include <cilk/cilk_api.h>
+#include <cilk/cilk.h>
 #include <csi/csi.h>
 #include "csan.h"
 
 #include "outs_red.h"
-#include "sstack.h"
 #include "stack.h"
 #include "label.h"
 
@@ -32,19 +31,58 @@ using MAAPstack = Stack_t<std::pair<csi_id_t, MAAP_t>>;
 using ustack = Stack_t<unsigned>;
 using pstack = Stack_t<uint8_t>;
 
+  // Stack structures for keeping track of MAAPs for pointer arguments to function calls
+  static void init_MAAPstack (void* view) {
+#if TRACE_CALLS
+    std::cerr << "init MAAPSTACK" << std::endl;
+#endif
+    new (view) MAAPstack();
+  }
 
+  static void reduce_MAAPstack (void* left_view, void* right_view) {
+#if TRACE_CALLS
+    std::cerr << "reduce MAAPSTACK" << std::endl;
+#endif
+    MAAPstack *left = static_cast<MAAPstack*>(left_view);
+    MAAPstack *right = static_cast<MAAPstack*>(right_view);
+    assert(right->size() == 0 && "Expected empty MAAPstack!");
+    right->~MAAPstack();
+  }
 
-void init_MAAPstack (void* view);
-void reduce_MAAPstack (void* left_view, void* right_view);
-void init_ustack(void* view);
-void reduce_ustack (void* left_view, void* right_view);
-void init_pstack(void* view);
-void reduce_pstack (void* left_view, void* right_view);
+  static void init_ustack(void* view) {
+#if TRACE_CALLS
+    std::cerr << "init ustack" << std::endl;
+#endif
+    new (view) ustack();
+  }
+  static void reduce_ustack (void* left_view, void* right_view) {
+#if TRACE_CALLS
+    std::cerr << "reduce ustack" << std::endl;
+#endif
+    ustack *left = static_cast<ustack*>(left_view);
+    ustack *right = static_cast<ustack*>(right_view);
+    assert(right->size() == 0 && "Expected empty ustack!");
+    right->~ustack();
+  }
+  static void init_pstack(void* view) {
+#if TRACE_CALLS
+    std::cerr << "init pstack" << std::endl;
+#endif
+    new (view) pstack();
+  }
+  static void reduce_pstack (void* left_view, void* right_view) {
+#if TRACE_CALLS
+    std::cerr << "reduce pstack" << std::endl;
+#endif
+    pstack *left = static_cast<pstack*>(left_view);
+    pstack *right = static_cast<pstack*>(right_view);
+    assert(right->size() == 0 && "Expected empty pstack!");
+    right->~pstack();
+  }
 
 typedef MAAPstack cilk_reducer(init_MAAPstack, reduce_MAAPstack) MAAPstack_reducer;
 typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
 typedef pstack cilk_reducer(init_pstack, reduce_pstack) pstack_reducer;
-
 
 extern pstack_reducer parallel_execution;
 
@@ -58,7 +96,7 @@ public:
   //shadow_stack_t stack;
 
 private:
-  shadow_stack_reducer stack;
+  //label_reducer stack;
   // Need to manually register reducer
   //
   // > warning: reducer callbacks not implemented for structure members
@@ -83,7 +121,7 @@ private:
 #ifndef OUTS_CERR
         reducer_register(outs_red);
 #endif
-        reducer_register(this_.stack);
+   //     reducer_register(this_.stack);
         //const char* envstr = getenv("CILKSCALE_OUT");
       }
 
@@ -91,13 +129,13 @@ private:
 #ifndef OUTS_CERR
         reducer_unregister(outs_red);
 #endif
-        reducer_unregister(this_.stack);
+     //   reducer_unregister(this_.stack);
       }
     } raii;
   } register_reducers = {.raii{*this}};
 
 public:
-  CilkpraceImpl_t() : stack()
+  CilkpraceImpl_t() /*: stack()*/
          // Not only are reducer callbacks not implemented, the hyperobject
          // is not even default constructed unless explicitly constructed.
   {
@@ -115,13 +153,13 @@ public:
   ~CilkpraceImpl_t() {}
 
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
-    stack.register_write(addr, num_bytes, store);
+  //  stack.register_write(addr, num_bytes, store);
   }
   void register_read(uint64_t addr, size_t num_bytes, source_loc_t store) {
-    stack.register_read(addr, num_bytes, store);
+  //  stack.register_read(addr, num_bytes, store);
   }
   void register_alloca(const void* addr, size_t nb) {
-    stack.register_alloca(addr, nb);
+  //  stack.register_alloca(addr, nb);
   }
   void advance_stack_frame(uint64_t addr) { 
     outs_red << "UNHANDLED STACK ADVANCE" << std::endl;
@@ -130,37 +168,37 @@ public:
     outs_red << "UNHANDLED STACK RESTORE" << std::endl;
   }
   void enter_func(const csi_id_t func_id, const bool may_spawn) {
-    if (may_spawn)
+ /*   if (may_spawn)
     {
       stack.push_boundary(func_id);
-    }
+    }*/
   }
   void exit_func(const csi_id_t func_id, const bool may_spawn) {
-    if (may_spawn)
+   /* if (may_spawn)
     {
       stack.pop_boundary(func_id);
-    } 
+    }*/ 
   }
   void task(const csi_id_t task_id) {
-    stack.push_task(task_id);
+    //stack.push_task(task_id);
   }
   void exit_task(const csi_id_t task_id) {
-    multimap_t collisions;
-    stack.join(collisions);
-    if (!collisions.empty())
-      outs_red << "\nRACE CONDITION TASK EXIT" << std::endl /*<< collisions*/ << std::endl << std::endl;
+    //multimap_t collisions;
+    //stack.join(collisions);
+    //if (!collisions.empty())
+    //  outs_red << "\nRACE CONDITION TASK EXIT" << std::endl /*<< collisions*/ << std::endl << std::endl;
   }
   void add_sp_frame() {
     //stack.add_sp_frame();
   }
   void add_continue_frame() {
-    stack.push_continue();
+    //stack.push_continue();
   }
   void enter_serial() {
-    multimap_t collisions;
-    stack.enter_serial(collisions);
-    if (!collisions.empty())
-      outs_red << "\nRACE CONDITION DURING SYNC" << std::endl /*<< collisions*/ << std::endl << std::endl;
+    //multimap_t collisions;
+    //stack.enter_serial(collisions);
+    //if (!collisions.empty())
+    //  outs_red << "\nRACE CONDITION DURING SYNC" << std::endl /*<< collisions*/ << std::endl << std::endl;
   }
 };
 //FIXME: Hardcoded for now
@@ -172,5 +210,4 @@ void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal, uintptr_t ptr, size_t le
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal, const void*  ptr, size_t len);
 void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal, uintptr_t ptr, size_t len);
 void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal, const void*  ptr, size_t len);
-
 
