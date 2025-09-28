@@ -3,9 +3,15 @@
 #define INCLUDED_SHADOW_STACK_H
 
 #include "cilkscale_timer.h"
+#include <cassert>
+#include <cilk/cilk.h>
 
 #ifndef SERIAL_TOOL
 #define SERIAL_TOOL 1
+#endif
+
+#if SERIAL_TOOL
+#include <cilk/cilk_stub.h>
 #endif
 
 #ifndef TRACE_CALLS
@@ -199,7 +205,7 @@ public:
   }
 };
 
-typedef shadow_stack_t _Hyperobject(shadow_stack_t::identity,
+typedef shadow_stack_t cilk_reducer(shadow_stack_t::identity,
                                     shadow_stack_t::reduce)
   shadow_stack_reducer;
 

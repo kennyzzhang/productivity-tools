@@ -2,8 +2,9 @@
 #ifndef _HYPERTABLE_H
 #define _HYPERTABLE_H
 
-#include <cstdint>
 #include "hyperobject_base.h"
+#include <cassert>
+#include <cstdint>
 
 // Helper methods for testing and setting keys.
 static const uintptr_t KEY_EMPTY = 0UL;
@@ -26,7 +27,7 @@ public:
   // An entry in the hash table.
   struct bucket {
     uintptr_t key = KEY_EMPTY; /* EMPTY, DELETED, or a user-provided pointer. */
-    index_t hash; /* hash of the key when inserted into the table. */
+    index_t hash = 0; /* hash of the key when inserted into the table. */
     reducer_base value;
 
     void make_tombstone() { key = KEY_DELETED; }
