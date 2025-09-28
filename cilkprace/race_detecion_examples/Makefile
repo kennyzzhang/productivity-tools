@@ -31,4 +31,4 @@ all: $(OUTS) $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
 	$(CXX) $(CPPFLAGS_SAN) $< -o $@
 
 clean:
-	rm $(OUTS)
+	rm $(OUTS)  $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
