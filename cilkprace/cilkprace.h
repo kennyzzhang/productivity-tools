@@ -1,5 +1,6 @@
 #pragma once
 #include <cilk/cilk.h>
+#include <cilk/cilk_api.h>
 #include <csi/csi.h>
 #include "csan.h"
 
@@ -153,6 +154,7 @@ public:
   ~CilkpraceImpl_t() {}
 
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
+    //outs_red << "WRITE with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
   //  stack.register_write(addr, num_bytes, store);
   }
   void register_read(uint64_t addr, size_t num_bytes, source_loc_t store) {
