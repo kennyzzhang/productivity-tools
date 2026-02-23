@@ -1,4 +1,4 @@
-CXX = ../../../../build/bin/clang++
+CXX = ../../../build/bin/clang++
 CSAN_BC := $(shell find ../../../../build -name "*cilksan.bc")
 PRACE_BC := $(shell find ../../../../build -name "*cilkprace.bc")
 OPT = -O3
