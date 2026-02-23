@@ -20,7 +20,8 @@ set(CILKPRACE_BITCODE_SOURCE
 
 include_directories(${CILKTOOLS_SOURCE_DIR}/include)
 
-set(CILKPRACE_CFLAGS ${SANITIZER_COMMON_CFLAGS} -mbmi2)
+set(CILKPRACE_CFLAGS ${SANITIZER_COMMON_CFLAGS})
+#set(CILKPRACE_CFLAGS ${SANITIZER_COMMON_CFLAGS} -mbmi2)
 append_list_if(CILKTOOLS_HAS_CILK -fopencilk CILKPRACE_CFLAGS)
 append_list_if(CILKTOOLS_HAS_FDEBUG_DEFAULT_VERSION_EQ_4_FLAG
   -fdebug-default-version=4 CILKPRACE_CFLAGS)
@@ -50,6 +51,8 @@ set(CILKPRACE_BITCODE_DEFINITIONS ${CILKPRACE_COMMON_DEFINITIONS}
 # Build Cilkprace runtimes shipped with Clang.
 add_cilktools_component(cilkprace)
 
+
+# I don't fully understand what I did here. TODO FIXME.
 if (APPLE)
     add_cilktools_runtime(clang_rt.cilkprace
       STATIC
@@ -70,6 +73,48 @@ if (APPLE)
       LINK_LIBS ${CILKPRACE_DYNAMIC_LIBS}
       DEFS ${CILKPRACE_DYNAMIC_DEFINITIONS}
       PARENT_TARGET cilkprace)
+
+    add_cilktools_object_libraries(RTCilkprace_dynamic
+      ARCHS ${CILKPRACE_SUPPORTED_ARCH}
+      SOURCES ${CILKPRACE_SOURCES}
+      CFLAGS ${CILKPRACE_DYNAMIC_CFLAGS}
+      DEFS ${CILKPRACE_DYNAMIC_DEFINITIONS}
+      DEPS ${CILKPRACE_OBJ_DEPS})
+
+    add_cilktools_object_libraries(RTCilkprace
+      ARCHS ${CILKPRACE_SUPPORTED_ARCH}
+      SOURCES ${CILKPRACE_SOURCES}
+      CFLAGS ${CILKPRACE_CFLAGS}
+      DEFS ${CILKPRACE_COMMON_DEFINITIONS}
+      DEPS ${CILKPRACE_OBJ_DEPS})
+
+    foreach (arch ${CILKPRACE_SUPPORTED_ARCH})
+      add_cilktools_bitcode(cilkprace
+        ARCHS ${arch}
+        SOURCES ${CILKPRACE_BITCODE_SOURCE}
+        CFLAGS ${CILKPRACE_BITCODE_CFLAGS}
+        DEFS ${CILKPRACE_BITCODE_DEFINITIONS}
+        PARENT_TARGET cilkprace)
+
+      add_cilktools_runtime(clang_rt.cilkprace
+        STATIC
+        ARCHS ${arch}
+        OBJECT_LIBS RTCilkprace
+        CFLAGS ${CILKPRACE_CFLAGS}
+        LINK_FLAGS ${CILKPRACE_STATIC_LINK_FLAGS}
+        DEFS ${CILKPRACE_COMMON_DEFINITIONS}
+        PARENT_TARGET cilkprace)
+
+      add_cilktools_runtime(clang_rt.cilkprace
+        SHARED
+        ARCHS ${arch}
+        OBJECT_LIBS RTCilkprace_dynamic
+        CFLAGS ${CILKPRACE_DYNAMIC_CFLAGS}
+        LINK_FLAGS ${CILKPRACE_DYNAMIC_LINK_FLAGS}
+        LINK_LIBS ${CILKPRACE_DYNAMIC_LIBS}
+        DEFS ${CILKPRACE_DYNAMIC_DEFINITIONS}
+        PARENT_TARGET cilkprace)
+    endforeach()
 
 else()
   # Compile Cilkprace sources into an object library

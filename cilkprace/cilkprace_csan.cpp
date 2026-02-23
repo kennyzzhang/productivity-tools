@@ -49,7 +49,7 @@ void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id, unsigned 
   outs_red << "[W" << worker_number() << "] func_entry(fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
   if (!HAS_INIT) return;
-  auto entry = (source_loc_t*) __csan_get_func_source_loc(func_id);
+  auto entry = (const source_loc_t*) __csan_get_func_source_loc(func_id);
   //outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
   tool->enter_func(func_id, prop.may_spawn);
 
@@ -82,7 +82,7 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
   //if (prop.is_read_before_write_in_bb)
   //  return;
   if (!HAS_INIT) return;
-  auto store = (source_loc_t*) __csan_get_load_source_loc(load_id);
+  auto store = (const source_loc_t*) __csan_get_load_source_loc(load_id);
   tool->register_read((uint64_t)addr, num_bytes, *store);
 #ifdef TRACE_CALLS
   outs_red << "LOAD ON (" << store->name << ", " << store->line_number << ")" << std::endl;
@@ -106,7 +106,7 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
   //if (prop.is_read_before_write_in_bb)
   //  return;
   if (!HAS_INIT) return;
-  auto store = (source_loc_t*) __csan_get_load_source_loc(load_id);
+  auto store = (const source_loc_t*) __csan_get_load_source_loc(load_id);
   tool->register_read((uint64_t)addr, num_bytes, *store);
 #ifdef TRACE_CALLS
   outs_red << "LOAD ON (" << store->name << ", " << store->line_number << ")" << std::endl;
@@ -126,7 +126,7 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
 #endif
   //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   if (!HAS_INIT) return;
-  auto store = (source_loc_t*) __csan_get_store_source_loc(store_id);
+  auto store = (const source_loc_t*) __csan_get_store_source_loc(store_id);
   tool->register_write((uint64_t)addr, num_bytes, *store);
 #ifdef TRACE_CALLS
   outs_red << "WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
@@ -146,7 +146,7 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
 #endif
   //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   if (!HAS_INIT) return;
-  auto store = (source_loc_t*) __csan_get_store_source_loc(store_id);
+  auto store = (const source_loc_t*) __csan_get_store_source_loc(store_id);
   tool->register_write((uint64_t)addr, num_bytes, *store);
 #ifdef TRACE_CALLS
   outs_red << "WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
@@ -323,7 +323,7 @@ CILKSAN_API void __csan_get_MAAP(MAAP_t *ptr, csi_id_t id, unsigned idx) {
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
                                     uintptr_t ptr, size_t len) {
   if (!HAS_INIT) return;
-  auto store = (source_loc_t*) __csan_get_load_source_loc(call_id);
+  auto store = (const source_loc_t*) __csan_get_load_source_loc(call_id);
 #ifdef TRACE_CALLS
   outs_red << "CHECK READ ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 #endif
@@ -341,7 +341,7 @@ void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
 void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
                                      uintptr_t ptr, size_t len) {
   if (!HAS_INIT) return;
-  auto store = (source_loc_t*) __csan_get_store_source_loc(call_id);
+  auto store = (const source_loc_t*) __csan_get_store_source_loc(call_id);
 #ifdef TRACE_CALLS
   outs_red << "CHECK WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 #endif
