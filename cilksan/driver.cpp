@@ -2,7 +2,9 @@
 #include "cilksan_internal.h"
 #include "debug_util.h"
 #include "driver.h"
+#include "race_info.h"
 #include "stack.h"
+#include <csi/csi.h>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -1102,7 +1104,23 @@ CILKSAN_API void __cilksan_record_alloc(void *addr, size_t size) {
 
 CILKSAN_API void __cilksan_record_free(void *ptr) {
   CheckingRAII nocheck;
-  CilkSanImpl.mark_free(ptr);
+  if (!should_check()) {
+    CilkSanImpl.mark_free(ptr);
+    return;
+  }
+  const size_t *size = CilkSanImpl.malloc_sizes.get((uintptr_t)ptr);
+  if (CilkSanImpl.malloc_sizes.contains((uintptr_t)ptr)) {
+    if (!is_execution_parallel()) {
+      CilkSanImpl.clear_alloc((size_t)ptr, *size);
+      CilkSanImpl.clear_shadow_memory((size_t)ptr, *size);
+    } else {
+      // Treat a free as a write to all freed addresses.  This way the tool will
+      // report a race if an operation tries to access a location that was freed
+      // in parallel.
+      CilkSanImpl.record_free((uintptr_t)ptr, *size, UNKNOWN_CSI_ID, MAType_t::FREE);
+    }
+    CilkSanImpl.malloc_sizes.remove((uintptr_t)ptr);
+  }
 }
 
 // FIXME: Currently these dynamic interposers are never used, because common
@@ -1117,7 +1135,7 @@ static std::map<uintptr_t, size_t> pages_to_clear;
 // dlsym uses some of the memory functions we are trying to interpose, which
 // means that calling dlsym directly will lead to infinite recursion and a
 // segfault.  Fortunately, dlsym can make do with memory-allocation functions
-// returning NULL, so we return NULL when we detect this inifinite recursion.
+// returning NULL, so we return NULL when we detect this infinite recursion.
 //
 // This trick seems questionable, but it also seems to be standard practice.
 // It's the same trick used by memusage.c in glibc, and there's little

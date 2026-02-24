@@ -750,10 +750,10 @@ CILKSAN_API void __csan_llvm_trap(const csi_id_t call_id,
     MAAPs.pop();
 }
 
-CILKSAN_API void __csan_llvm_va_start(const csi_id_t call_id,
-                                      const csi_id_t func_id,
-                                      unsigned MAAP_count,
-                                      const call_prop_t prop, va_list ap) {
+CILKSAN_API void __csan_llvm_va_start_p0(const csi_id_t call_id,
+                                         const csi_id_t func_id,
+                                         unsigned MAAP_count,
+                                         const call_prop_t prop, va_list ap) {
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -764,9 +764,10 @@ CILKSAN_API void __csan_llvm_va_start(const csi_id_t call_id,
     MAAPs.pop();
 }
 
-CILKSAN_API void __csan_llvm_va_end(const csi_id_t call_id,
-                                    const csi_id_t func_id, unsigned MAAP_count,
-                                    const call_prop_t prop, va_list ap) {
+CILKSAN_API void __csan_llvm_va_end_p0(const csi_id_t call_id,
+                                       const csi_id_t func_id,
+                                       unsigned MAAP_count,
+                                       const call_prop_t prop, va_list ap) {
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -844,6 +845,22 @@ CILKSAN_API void
 __csan___cxa_atexit(const csi_id_t call_id, const csi_id_t func_id,
                     unsigned MAAP_count, const call_prop_t prop, int result,
                     void (*func)(void *), void *arg, void *dso_handle) {
+  if (!CILKSAN_INITIALIZED)
+    return;
+
+  if (!should_check())
+    return;
+
+  for (unsigned i = 0; i < MAAP_count; ++i)
+    MAAPs.pop();
+}
+
+CILKSAN_API void __csan___cxa_throw(const csi_id_t call_id,
+                                    const csi_id_t func_id, unsigned MAAP_count,
+                                    const call_prop_t prop,
+                                    void *thrown_exception,
+                                    std::type_info *tinfo,
+                                    void (*dest)(void *)) {
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -1312,6 +1329,24 @@ CILKSAN_API void __csan_lldiv(const csi_id_t call_id, const csi_id_t func_id,
   return;
 }
 
+CILKSAN_API void __csan_erff(const csi_id_t call_id, const csi_id_t func_id,
+                             unsigned MAAP_count, const call_prop_t prop,
+                             float result, float arg) {
+  return;
+}
+
+CILKSAN_API void __csan_erf(const csi_id_t call_id, const csi_id_t func_id,
+                            unsigned MAAP_count, const call_prop_t prop,
+                            double result, double arg) {
+  return;
+}
+
+CILKSAN_API void __csan_erfl(const csi_id_t call_id, const csi_id_t func_id,
+                             unsigned MAAP_count, const call_prop_t prop,
+                             long double result, long double arg) {
+  return;
+}
+
 CILKSAN_API void __csan_execl(const csi_id_t call_id, const csi_id_t func_id,
                               unsigned MAAP_count, const call_prop_t prop,
                               int result, const char *filename, const char *arg,
@@ -1448,6 +1483,12 @@ CILKSAN_API void __csan_execvpe(const csi_id_t call_id, const csi_id_t func_id,
     return;
 
   check_read_bytes(call_id, filename_MAAPVal, filename, strlen(filename) + 1);
+}
+
+CILKSAN_API void __csan_exit(const csi_id_t call_id, const csi_id_t func_id,
+                             unsigned MAAP_count, const call_prop_t prop,
+                             int exit_code) {
+  return;
 }
 
 CILKSAN_API void __csan_expf(const csi_id_t call_id, const csi_id_t func_id,

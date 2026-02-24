@@ -27,8 +27,7 @@
 #if SERIAL_TOOL
 #include <cilk/cilk_stub.h>
 #else // !SERIAL_TOOL
-#include <cilk/cilk.h>
-#include <cilk/ostream_reducer.h>
+#include <cilk/ostream_reducer>
 using out_reducer = cilk::ostream_reducer<char>;
 #endif // SERIAL_TOOL
 
@@ -98,7 +97,7 @@ public:
 
 // Top-level benchmarking tool.
 static BenchmarkImplT *createTool(void) {
-  // Ordered dynamic initalization should ensure that it's safe to create the
+  // Ordered dynamic initialization should ensure that it's safe to create the
   // tool.
   return new BenchmarkImplT(getenv("CILKSCALE_OUT"));
 }

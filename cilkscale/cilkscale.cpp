@@ -28,8 +28,7 @@
 #if SERIAL_TOOL
 FILE *err_io = stderr;
 #else // !SERIAL_TOOL
-#include <cilk/cilk_api.h>
-#include <cilk/ostream_reducer.h>
+#include <cilk/ostream_reducer>
 using out_reducer = cilk::ostream_reducer<char>;
 #endif // SERIAL_TOOL
 
@@ -72,7 +71,7 @@ public:
 
 // Top-level Cilkscale tool.
 static CilkscaleImplT *createTool(void) {
-  // Ordered dynamic initalization should ensure that it's safe to create the
+  // Ordered dynamic initialization should ensure that it's safe to create the
   // tool.
   return new CilkscaleImplT(getenv("CILKSCALE_OUT"));
 }
