@@ -4,3 +4,6 @@
 *.ll
 *.notool
 
+*.yml
+*.plist
+
