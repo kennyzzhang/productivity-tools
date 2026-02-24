@@ -1,6 +1,7 @@
 #pragma once
-#include <cilk/cilk_api.h>
-#include <cilk/ostream_reducer.h>
+
+//#include <cilk/cilk>
+//#include <cilk/ostream_reducer>
 #include <iostream>
 #include <fstream>
 
@@ -8,7 +9,7 @@
 
 extern std::unique_ptr<std::ofstream> outf;
 
-//#define OUTS_CERR
+#define OUTS_CERR
 
 #ifdef OUTS_CERR
 #define outs_red std::cout
