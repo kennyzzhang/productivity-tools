@@ -1,7 +1,7 @@
 CXX = ../../../build/bin/clang++
 CSAN_BC := $(shell find ../../../build -name "*cilksan*.bc")
 PRACE_BC := $(shell find ../../../build -name "*cilkprace*.bc")
-OPT = -O1 -v
+OPT = -O0 -v
 CPPFLAGS_NOTOOL = -fopencilk -g $(OPT) -fsanitize=address -fopencilk-enable-pedigrees
 CPPFLAGS_CSAN = -fopencilk -fsanitize=cilk -g $(OPT) -mllvm --enable-static-race-detection=false -mllvm -csi-tool-bitcode=$(CSAN_BC)
 CPPFLAGS_SAN = -fopencilk -fsanitize=cilkprace -g $(OPT) -mllvm -csi-tool-bitcode=$(PRACE_BC)
@@ -12,7 +12,7 @@ OUTS_NOTOOL = $(patsubst %.cpp,%.notool,$(FILES))
 OUTS_CSAN = $(patsubst %.cpp,%.csan,$(FILES))
 OUTS_SAN = $(patsubst %.cpp,%.san,$(FILES))
 
-.PHONY: all clean
+.PHONY: all clean test
 
 all: $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
 
@@ -27,3 +27,7 @@ all: $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
 
 clean:
 	rm $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
+
+test:
+	CILK_NWORKERS=1 ./blah.san
+

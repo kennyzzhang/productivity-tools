@@ -6,7 +6,6 @@
 
 #include "outs_red.h"
 #include "stack.h"
-#include "label.h"
 
 #define TRACE_CALLS 1
 #undef TRACE_CALLS
@@ -155,6 +154,7 @@ public:
 
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
     outs_red << "WRITE with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
+    outs_red << "WRITE with label " << __cilkrts_get_os_label().label << std::endl;
     //outs_red << "WRITE with pedigree " << "[REDACTED]" << std::endl;
   //  stack.register_write(addr, num_bytes, store);
   }
