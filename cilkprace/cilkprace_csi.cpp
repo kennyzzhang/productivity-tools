@@ -125,6 +125,7 @@ CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
   tool->task(task_id);
+  tool->right_child();
 }
 
 CILKTOOL_API
@@ -161,6 +162,7 @@ void __csi_detach_continue(const csi_id_t detach_continue_id,
       << ", unwind=" << prop.is_unwind << ")" << std::endl;
 #endif
   tool->add_continue_frame();
+  tool->left_child();
 }
 
 CILKTOOL_API

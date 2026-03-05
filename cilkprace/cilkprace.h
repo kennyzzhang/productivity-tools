@@ -153,13 +153,15 @@ public:
   ~CilkpraceImpl_t() {}
 
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
-    outs_red << "WRITE with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
+    //outs_red << "WRITE with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
     outs_red << "WRITE with label " << __cilkrts_get_os_label().label << std::endl;
     //outs_red << "WRITE with pedigree " << "[REDACTED]" << std::endl;
   //  stack.register_write(addr, num_bytes, store);
   }
   void register_read(uint64_t addr, size_t num_bytes, source_loc_t store) {
   //  stack.register_read(addr, num_bytes, store);
+    //outs_red << "READ  with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
+    //outs_red << "READ  with label " << __cilkrts_get_os_label().label << std::endl;
   }
   void register_alloca(const void* addr, size_t nb) {
   //  stack.register_alloca(addr, nb);
@@ -182,22 +184,45 @@ public:
       stack.pop_boundary(func_id);
     }*/ 
   }
+
+  void left_child()
+  {
+    //__cilkrts_get_os_label().label.append_left_child();
+  }
+
+  void right_child() {
+     //__cilkrts_get_os_label().label.append_right_child();
+  } 
+
+  void left_child_join() {
+    //__cilkrts_get_os_label().label.join_left_child();
+  }
+
   void task(const csi_id_t task_id) {
     //stack.push_task(task_id);
+    //outs_red << "TASK1 with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
+    
+    //outs_red << "TASK1 with label " << __cilkrts_get_os_label().label << std::endl;
   }
   void exit_task(const csi_id_t task_id) {
+    //outs_red << "SYNC1 with label " << __cilkrts_get_os_label().label << std::endl;
     //multimap_t collisions;
     //stack.join(collisions);
     //if (!collisions.empty())
     //  outs_red << "\nRACE CONDITION TASK EXIT" << std::endl /*<< collisions*/ << std::endl << std::endl;
   }
   void add_sp_frame() {
+    
     //stack.add_sp_frame();
   }
   void add_continue_frame() {
+   
     //stack.push_continue();
   }
   void enter_serial() {
+     
+    //outs_red << "SYNC2 with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
+    outs_red << "SYNC2 with label " << __cilkrts_get_os_label().label << std::endl;
     //multimap_t collisions;
     //stack.enter_serial(collisions);
     //if (!collisions.empty())
