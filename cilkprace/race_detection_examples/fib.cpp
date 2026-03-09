@@ -14,6 +14,7 @@ int p_fib(int n) {
 
 int main()
 {
-	std::cout << "fib: " << p_fib(5) << std::endl;
+  int x = p_fib(32);
+	std::cout << "fib: " << x << std::endl;
   return 0;
 }
