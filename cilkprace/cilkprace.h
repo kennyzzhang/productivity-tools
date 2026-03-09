@@ -222,7 +222,7 @@ public:
   void enter_serial() {
      
     //outs_red << "SYNC2 with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
-    outs_red << "SYNC2 with label " << __cilkrts_get_os_label().label << std::endl;
+    //outs_red << "SYNC2 with label " << __cilkrts_get_os_label().label << std::endl;
     //multimap_t collisions;
     //stack.enter_serial(collisions);
     //if (!collisions.empty())
