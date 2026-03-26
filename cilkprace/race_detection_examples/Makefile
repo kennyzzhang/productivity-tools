@@ -29,5 +29,5 @@ clean:
 	rm $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
 
 test:
-	CILK_NWORKERS=1 ./blah.san
+	CILK_NWORKERS=10 ./blah.san
 

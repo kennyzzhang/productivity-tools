@@ -2,6 +2,8 @@
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
 #include <csi/csi.h>
+#include <cstddef>
+#include <sys/mman.h>
 #include "csan.h"
 
 #include "outs_red.h"
@@ -96,6 +98,8 @@ public:
   //shadow_stack_t stack;
 
 private:
+  size_t shadow_mem_size = 1ull << 46;
+  void* shadow_mem;
   //label_reducer stack;
   // Need to manually register reducer
   //
@@ -143,6 +147,11 @@ public:
 #ifdef TRACE_CALLS
     outs_red << "HAS INIT" << std::endl;
 #endif
+    shadow_mem = mmap(nullptr, shadow_mem_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if (shadow_mem == (void*)-1)
+      perror("SHADOW MEM");
+    outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
+    
     // Note that we start executing the program in series.
     //parallel_execution.push_back(0);
     // Push a default value of 0 onto the MAAP_counts stack, in case this

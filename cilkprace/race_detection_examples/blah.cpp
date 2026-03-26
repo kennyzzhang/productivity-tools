@@ -28,10 +28,10 @@ int main()
   cilk_spawn blah(y, "newspawn2 ");
   blah(y, "continue 3 ");
   cilk_sync;
-  //cilk_sync;
-  //cilk_sync;
-  //cilk_sync;
-  //cilk_sync;
+  cilk_sync;
+  cilk_sync;
+  cilk_sync;
+  cilk_sync;
   blah(x, "fully synced ");
   return 0;
 }
