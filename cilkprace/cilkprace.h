@@ -192,6 +192,7 @@ public:
     os_label* labels = addr_to_shadow((void*)addr);
     for (size_t i = 0; i < num_bytes; i++)
     {
+      //TODO: Race condition probably.
       outs_red << "||? " << __cilkrts_get_os_label().label.is_parallel(labels[i]) << std::endl;
       labels[i] = __cilkrts_get_os_label().label;
     }
