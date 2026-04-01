@@ -1,8 +1,12 @@
 #pragma once
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
+#include <cilk/os_label.h>
+#include <cmath>
 #include <csi/csi.h>
 #include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <sys/mman.h>
 #include "csan.h"
 
@@ -98,8 +102,28 @@ public:
   //shadow_stack_t stack;
 
 private:
-  size_t shadow_mem_size = 1ull << 46;
+  static constexpr size_t vmem_bytes = 0x00007fffffffffff; 
+  static constexpr size_t overhead_per_byte = sizeof(os_label);
+  static constexpr size_t vmem_shadow_granularity = 1;
+  static constexpr size_t bytes_per_entry = overhead_per_byte + vmem_shadow_granularity;
+  static constexpr size_t vmem_user_addressable_bytes = vmem_bytes / bytes_per_entry * vmem_shadow_granularity;
+  static constexpr size_t vmem_shadow_size = vmem_bytes - vmem_user_addressable_bytes;
+
   void* shadow_mem;
+
+  os_label* addr_to_shadow(void* addr)
+  {
+    //TODO: Bounds chekcing?
+    // We have to be piecewise. But, we can imagine memory above us as glued on where we are.
+    // That is, project the addresses above our shadow memory as if they were just above the lower addresses
+    addr = (addr < shadow_mem) ? addr : (void*)((uint8_t*)addr - (uint8_t*)shadow_mem);
+
+    // Now we have to re-scale our address onto our shadow mapping. 
+    // Fortunately, since each byte indexes into the array, we can just... index.
+    os_label* shadow_addr = &((os_label*)shadow_mem)[(size_t)addr/vmem_shadow_granularity];
+    return shadow_addr;
+  }
+
   //label_reducer stack;
   // Need to manually register reducer
   //
@@ -147,11 +171,12 @@ public:
 #ifdef TRACE_CALLS
     outs_red << "HAS INIT" << std::endl;
 #endif
-    shadow_mem = mmap(nullptr, shadow_mem_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    shadow_mem = mmap(nullptr, vmem_shadow_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     if (shadow_mem == (void*)-1)
       perror("SHADOW MEM");
     outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
-    
+    outs_red << "Want mem size: " << vmem_shadow_size << " = 2^" << log2(vmem_shadow_size) << std::endl;
+    outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
     // Note that we start executing the program in series.
     //parallel_execution.push_back(0);
     // Push a default value of 0 onto the MAAP_counts stack, in case this
@@ -164,6 +189,12 @@ public:
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
     //outs_red << "WRITE with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
     outs_red << "WRITE with label " << __cilkrts_get_os_label().label << std::endl;
+    os_label* labels = addr_to_shadow((void*)addr);
+    for (size_t i = 0; i < num_bytes; i++)
+    {
+      outs_red << "||? " << __cilkrts_get_os_label().label.is_parallel(labels[i]) << std::endl;
+      labels[i] = __cilkrts_get_os_label().label;
+    }
     //outs_red << "WRITE with pedigree " << "[REDACTED]" << std::endl;
   //  stack.register_write(addr, num_bytes, store);
   }

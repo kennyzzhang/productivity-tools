@@ -29,5 +29,11 @@ clean:
 	rm $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
 
 test:
-	CILK_NWORKERS=10 ./blah.san
+	CILK_NWORKERS=1 ./blah.san
+
+test_race:
+	CILK_NWORKERS=1 ./single_spawn_race.san
+
+test_norace:
+	CILK_NWORKERS=1 ./single_spawn_norace.san
 
