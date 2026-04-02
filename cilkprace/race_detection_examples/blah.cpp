@@ -3,8 +3,8 @@
 
 
 void blah(int& n, const char* msg) {
-  std::cout << msg;
-  //n = 2;
+  //std::cout << msg;
+  n = 2;
 }
 
 int main()

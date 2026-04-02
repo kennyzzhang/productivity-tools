@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <ostream>
 #include <sys/mman.h>
 #include "csan.h"
 
@@ -174,9 +175,9 @@ public:
     shadow_mem = mmap(nullptr, vmem_shadow_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     if (shadow_mem == (void*)-1)
       perror("SHADOW MEM");
-    outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
-    outs_red << "Want mem size: " << vmem_shadow_size << " = 2^" << log2(vmem_shadow_size) << std::endl;
-    outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
+    //outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
+    //outs_red << "Want mem size: " << vmem_shadow_size << " = 2^" << log2(vmem_shadow_size) << std::endl;
+    //outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
     // Note that we start executing the program in series.
     //parallel_execution.push_back(0);
     // Push a default value of 0 onto the MAAP_counts stack, in case this
@@ -186,16 +187,27 @@ public:
 
   ~CilkpraceImpl_t() {}
 
+
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
     //outs_red << "WRITE with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
-    outs_red << "WRITE with label " << __cilkrts_get_os_label().label << std::endl;
+    //outs_red << "WRITE with label " << __cilkrts_get_os_label().label << std::endl;
+    bool has_race = false;
     os_label* labels = addr_to_shadow((void*)addr);
     for (size_t i = 0; i < num_bytes; i++)
     {
       //TODO: Race condition probably.
-      outs_red << "||? " << __cilkrts_get_os_label().label.is_parallel(labels[i]) << std::endl;
+      bool race = __cilkrts_get_os_label().label.is_parallel(labels[i]);
+      if (race) outs_red << "RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
+      has_race |= race;
       labels[i] = __cilkrts_get_os_label().label;
     }
+    if (has_race) {
+      outs_red << "BY " <<  __cilkrts_get_os_label().label << std::endl;
+      outs_red << "@ " << store.filename << " Ln " << store.line_number << " Col " << store.column_number << std::endl;
+      outs_red << "======================" << std::endl;
+
+    }
+
     //outs_red << "WRITE with pedigree " << "[REDACTED]" << std::endl;
   //  stack.register_write(addr, num_bytes, store);
   }
