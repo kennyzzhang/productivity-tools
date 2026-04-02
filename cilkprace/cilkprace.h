@@ -195,7 +195,12 @@ public:
     os_label* labels = addr_to_shadow((void*)addr);
     for (size_t i = 0; i < num_bytes; i++)
     {
-      //TODO: Race condition probably.
+      //TODO: Race condition probably. Maybe Read-Copy-Update pattern? std::atomic array instead?
+      // Viable idea: std::atomic array. maybe version bit instead, or a lock.
+      // You *HAVE* to restart if you got updated over. 
+      // Example: Fork into two processes. They both check the parent, and are in serial with the parent.
+      // One succeeds first and the other must retry, or miss the race.
+      // That is, we do have to serialize unfortunately. It's lock free but not wait free.
       bool race = __cilkrts_get_os_label().label.is_parallel(labels[i]);
       if (race) outs_red << "RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
       has_race |= race;
