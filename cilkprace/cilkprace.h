@@ -176,7 +176,7 @@ public:
     if (shadow_mem == (void*)-1)
       perror("SHADOW MEM");
     //outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
-    //outs_red << "Want mem size: " << vmem_shadow_size << " = 2^" << log2(vmem_shadow_size) << std::endl;
+    outs_red << "Want mem size: " << vmem_shadow_size << " = 2^" << log2(vmem_shadow_size) << std::endl;
     //outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
     // Note that we start executing the program in series.
     //parallel_execution.push_back(0);
@@ -201,6 +201,10 @@ public:
       // Example: Fork into two processes. They both check the parent, and are in serial with the parent.
       // One succeeds first and the other must retry, or miss the race.
       // That is, we do have to serialize unfortunately. It's lock free but not wait free.
+      // TODO: Cracer uses priority-write with CAS 
+      // TODO: test/cilksan/TestCases
+      // TODO: Count distinct races?
+
       bool race = __cilkrts_get_os_label().label.is_parallel(labels[i]);
       if (race) outs_red << "RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
       has_race |= race;
