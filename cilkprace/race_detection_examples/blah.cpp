@@ -12,7 +12,7 @@ int main()
   int x;
   int y;
   blah(x, "base level ");
-  cilk_spawn blah(y, "spawn0 ");
+  cilk_spawn {y = 2;};
   cilk_scope {
     cilk_spawn blah(y, "spawn1 ");
     cilk_spawn blah(x, "spawn2 ");

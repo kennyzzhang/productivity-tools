@@ -6,7 +6,6 @@
 #include <csi/csi.h>
 #include <cstddef>
 #include <cstdint>
-#include <iterator>
 #include <ostream>
 #include <sys/mman.h>
 #include "csan.h"
@@ -99,12 +98,8 @@ __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
 }
 
 class CilkpraceImpl_t {
-public:
-  //shadow_stack_t stack;
-
-private:
   static constexpr size_t vmem_bytes = 0x00007fffffffffff; 
-  static constexpr size_t overhead_per_byte = sizeof(os_label);
+  static constexpr size_t overhead_per_byte = sizeof(shadow_label);
   static constexpr size_t vmem_shadow_granularity = 1;
   static constexpr size_t bytes_per_entry = overhead_per_byte + vmem_shadow_granularity;
   static constexpr size_t vmem_user_addressable_bytes = vmem_bytes / bytes_per_entry * vmem_shadow_granularity;
@@ -112,7 +107,7 @@ private:
 
   void* shadow_mem;
 
-  os_label* addr_to_shadow(void* addr)
+  shadow_label* addr_to_shadow(void* addr)
   {
     //TODO: Bounds chekcing?
     // We have to be piecewise. But, we can imagine memory above us as glued on where we are.
@@ -121,52 +116,13 @@ private:
 
     // Now we have to re-scale our address onto our shadow mapping. 
     // Fortunately, since each byte indexes into the array, we can just... index.
-    os_label* shadow_addr = &((os_label*)shadow_mem)[(size_t)addr/vmem_shadow_granularity];
+    shadow_label* shadow_addr = &((shadow_label*)shadow_mem)[(size_t)addr/vmem_shadow_granularity];
     return shadow_addr;
   }
 
-  //label_reducer stack;
-  // Need to manually register reducer
-  //
-  // > warning: reducer callbacks not implemented for structure members
-  // > [-Wcilk-ignored]
-  struct {
-    template <class T>
-    static void reducer_register(T& red) {
-      __cilkrts_reducer_register(&red, sizeof(red),
-          &std::decay_t<decltype(*&red)>::identity,
-          &std::decay_t<decltype(*&red)>::reduce);
-    }
-
-    template <class T>
-    static void reducer_unregister(T& red) {
-      __cilkrts_reducer_unregister(&red);
-    }
-
-    struct RAII {
-      CilkpraceImpl_t& this_;
-
-      RAII(decltype(this_) this_) : this_(this_) {
-#ifndef OUTS_CERR
-        reducer_register(outs_red);
-#endif
-   //     reducer_register(this_.stack);
-        //const char* envstr = getenv("CILKSCALE_OUT");
-      }
-
-      ~RAII() {
-#ifndef OUTS_CERR
-        reducer_unregister(outs_red);
-#endif
-     //   reducer_unregister(this_.stack);
-      }
-    } raii;
-  } register_reducers = {.raii{*this}};
 
 public:
-  CilkpraceImpl_t() /*: stack()*/
-         // Not only are reducer callbacks not implemented, the hyperobject
-         // is not even default constructed unless explicitly constructed.
+  CilkpraceImpl_t() 
   {
     HAS_INIT = true;
 #ifdef TRACE_CALLS
@@ -178,6 +134,7 @@ public:
     //outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
     outs_red << "Want mem size: " << vmem_shadow_size << " = 2^" << log2(vmem_shadow_size) << std::endl;
     //outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
+    
     // Note that we start executing the program in series.
     //parallel_execution.push_back(0);
     // Push a default value of 0 onto the MAAP_counts stack, in case this
@@ -189,106 +146,54 @@ public:
 
 
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
-    //outs_red << "WRITE with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
-    //outs_red << "WRITE with label " << __cilkrts_get_os_label().label << std::endl;
     bool has_race = false;
-    os_label* labels = addr_to_shadow((void*)addr);
+    shadow_label* labels = addr_to_shadow((void*)addr);
     for (size_t i = 0; i < num_bytes; i++)
     {
-      //TODO: Race condition probably. Maybe Read-Copy-Update pattern? std::atomic array instead?
-      // Viable idea: std::atomic array. maybe version bit instead, or a lock.
-      // You *HAVE* to restart if you got updated over. 
-      // Example: Fork into two processes. They both check the parent, and are in serial with the parent.
-      // One succeeds first and the other must retry, or miss the race.
-      // That is, we do have to serialize unfortunately. It's lock free but not wait free.
-      // TODO: Cracer uses priority-write with CAS 
-      // TODO: test/cilksan/TestCases
-      // TODO: Count distinct races?
-
-      bool race = __cilkrts_get_os_label().label.is_parallel(labels[i]);
-      if (race) outs_red << "RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
+      bool race = labels[i].does_write_race(__cilkrts_get_os_label().label);
+      if (race) outs_red << "WRITE RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
       has_race |= race;
-      labels[i] = __cilkrts_get_os_label().label;
     }
     if (has_race) {
       outs_red << "BY " <<  __cilkrts_get_os_label().label << std::endl;
       outs_red << "@ " << store.filename << " Ln " << store.line_number << " Col " << store.column_number << std::endl;
       outs_red << "======================" << std::endl;
-
     }
+  }
 
-    //outs_red << "WRITE with pedigree " << "[REDACTED]" << std::endl;
-  //  stack.register_write(addr, num_bytes, store);
-  }
   void register_read(uint64_t addr, size_t num_bytes, source_loc_t store) {
-  //  stack.register_read(addr, num_bytes, store);
-    //outs_red << "READ  with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
-    //outs_red << "READ  with label " << __cilkrts_get_os_label().label << std::endl;
+    bool has_race = false;
+    shadow_label* labels = addr_to_shadow((void*)addr);
+    for (size_t i = 0; i < num_bytes; i++)
+    {
+      bool race = labels[i].does_read_race(__cilkrts_get_os_label().label);
+      if (race) outs_red << "READ RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
+      has_race |= race;
+    }
+    if (has_race) {
+      outs_red << "BY " <<  __cilkrts_get_os_label().label << std::endl;
+      outs_red << "@ " << store.filename << " Ln " << store.line_number << " Col " << store.column_number << std::endl;
+      outs_red << "======================" << std::endl;
+    }
   }
+
   void register_alloca(const void* addr, size_t nb) {
-  //  stack.register_alloca(addr, nb);
+   outs_red << "UNHANDLED ALLOCA" << std::endl;
   }
+
+  void register_allocfn(const void* addr, size_t nb) {
+   outs_red << "UNHANDLED ALLOCFN" << std::endl;
+  }
+
+  void register_free(const void* addr) {
+   outs_red << "UNHANDLED FREE" << std::endl;
+  }
+
   void advance_stack_frame(uint64_t addr) { 
     outs_red << "UNHANDLED STACK ADVANCE" << std::endl;
   }
   void restore_stack(const csi_id_t call_id, uint64_t addr) { 
     outs_red << "UNHANDLED STACK RESTORE" << std::endl;
-  }
-  void enter_func(const csi_id_t func_id, const bool may_spawn) {
- /*   if (may_spawn)
-    {
-      stack.push_boundary(func_id);
-    }*/
-  }
-  void exit_func(const csi_id_t func_id, const bool may_spawn) {
-   /* if (may_spawn)
-    {
-      stack.pop_boundary(func_id);
-    }*/ 
-  }
-
-  void left_child()
-  {
-    //__cilkrts_get_os_label().label.append_left_child();
-  }
-
-  void right_child() {
-     //__cilkrts_get_os_label().label.append_right_child();
-  } 
-
-  void left_child_join() {
-    //__cilkrts_get_os_label().label.join_left_child();
-  }
-
-  void task(const csi_id_t task_id) {
-    //stack.push_task(task_id);
-    //outs_red << "TASK1 with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
-    
-    //outs_red << "TASK1 with label " << __cilkrts_get_os_label().label << std::endl;
-  }
-  void exit_task(const csi_id_t task_id) {
-    //outs_red << "SYNC1 with label " << __cilkrts_get_os_label().label << std::endl;
-    //multimap_t collisions;
-    //stack.join(collisions);
-    //if (!collisions.empty())
-    //  outs_red << "\nRACE CONDITION TASK EXIT" << std::endl /*<< collisions*/ << std::endl << std::endl;
-  }
-  void add_sp_frame() {
-    
-    //stack.add_sp_frame();
-  }
-  void add_continue_frame() {
-   
-    //stack.push_continue();
-  }
-  void enter_serial() {
-     
-    //outs_red << "SYNC2 with pedigree " << __cilkrts_get_pedigree().rank << std::endl;
-    //outs_red << "SYNC2 with label " << __cilkrts_get_os_label().label << std::endl;
-    //multimap_t collisions;
-    //stack.enter_serial(collisions);
-    //if (!collisions.empty())
-    //  outs_red << "\nRACE CONDITION DURING SYNC" << std::endl /*<< collisions*/ << std::endl << std::endl;
   }
 };
 //FIXME: Hardcoded for now

@@ -32,7 +32,6 @@ void __csi_func_entry(const csi_id_t func_id, const func_prop_t prop) {
   auto entry = __csi_get_func_source_loc(func_id);
   outs_red << "FUNC: " << entry->name << " has " << prop.num_sync_reg << " sync regions " << std::endl;
 #endif
-  tool->enter_func(func_id, prop.may_spawn);
 }
 
 CILKTOOL_API
@@ -43,7 +42,6 @@ void __csi_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id,
       << "[W" << worker_number() << "] func_exit(feid=" << func_exit_id
       << ", fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
-  tool->exit_func(func_id, prop.may_spawn);
 }
 
 CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
@@ -64,9 +62,6 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
   //  return;
   auto store = __csi_get_load_source_loc(load_id);
   tool->register_read((uint64_t)addr, num_bytes, *store);
-#ifdef TRACE_CALLS
-  outs_red << "LOAD ON (" << store->name << ", " << store->line_number << ")" << std::endl;
-#endif
 }
 
 CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
@@ -98,9 +93,6 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
   //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   auto store = __csi_get_store_source_loc(store_id);
   tool->register_write((uint64_t)addr, num_bytes, *store);
-#ifdef TRACE_CALLS
-  outs_red << "WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
-#endif
 }
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
@@ -124,8 +116,6 @@ CILKTOOL_API void __csi_task(const csi_id_t task_id, const csi_id_t detach_id,
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
-  tool->task(task_id);
-  tool->right_child();
 }
 
 CILKTOOL_API
@@ -138,7 +128,6 @@ void __csi_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
       << ", tid=" << task_id << ", did=" << detach_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  tool->exit_task(task_id);
 }
 
 CILKTOOL_API
@@ -161,8 +150,6 @@ void __csi_detach_continue(const csi_id_t detach_continue_id,
       << detach_continue_id << ", did=" << detach_id << ", sr=" << sync_reg
       << ", unwind=" << prop.is_unwind << ")" << std::endl;
 #endif
-  tool->add_continue_frame();
-  tool->left_child();
 }
 
 CILKTOOL_API
@@ -181,7 +168,6 @@ void __csi_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
       << sync_reg << ")" << std::endl;
 #endif
-  tool->enter_serial();
 }
 
 CILKTOOL_API
@@ -220,6 +206,8 @@ void __csi_after_allocfn(const csi_id_t allocfn_id, const void *addr,
       << alignment << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty
       << ")" << std::endl;
 #endif
+
+tool->register_allocfn(addr, num);
 }
 
 CILKTOOL_API
@@ -230,6 +218,8 @@ void __csi_before_free(const csi_id_t free_id, const void *ptr,
       << "[W" << worker_number() << "] before_free(fid=" << free_id
       << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
+
+tool->register_free(ptr);
 }
 
 CILKTOOL_API
