@@ -330,8 +330,6 @@ public:
   AddrMap_t<size_t> malloc_sizes;
 
 private:
-  inline void merge_bag_from_returning_child(bool returning_from_detach,
-                                             unsigned sync_reg);
   inline void start_new_function(unsigned num_sync_reg);
   inline void exit_function();
   inline void enter_cilk_function(unsigned num_sync_reg);
