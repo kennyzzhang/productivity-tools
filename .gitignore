@@ -7,3 +7,6 @@ multi_arch
 *.csan
 *.notool
 
+cilkprace/race_detection_examples/loop
+cilkprace/race_detection_examples/*.dSYM
+cilkprace/race_detection_examples/single_spawn_norace
