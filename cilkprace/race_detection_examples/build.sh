@@ -51,12 +51,14 @@ echo $OPENCILK $SOURCE_DIR $BUILD_DIR
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 pwd
-cmake \
-  -DCMAKE_C_COMPILER="$OPENCILK"/bin/clang \
-  -DCMAKE_CXX_COMPILER="$OPENCILK"/bin/clang++ \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-  -DDISABLED_TESTS='fibred;heat;fft' \
+cmake                                                \
+  -DCMAKE_C_COMPILER="$OPENCILK/bin/clang"           \
+  -DCMAKE_CXX_COMPILER="$OPENCILK/bin/clang++"       \
+  -DCMAKE_BUILD_TYPE="RelWithDebInfo"                \
+  -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"   \
+  -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS="ON"               \
+  -DDISABLED_TESTS="fibred;heat;fft"                 \
   "$SOURCE_DIR"
 
 cmake --build . -j "$CORE_COUNT"
