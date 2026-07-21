@@ -5216,3 +5216,9 @@ CILKSAN_API void __csan___cxa_throw(const csi_id_t call_id,
   for (unsigned i = 0; i < MAAP_count; ++i)
     MAAPs.pop();
 }
+
+CILKSAN_API void __csan_exit(const csi_id_t call_id, const csi_id_t func_id,
+                             unsigned MAAP_count, const call_prop_t prop,
+                             int exit_code) {
+  return;
+}
