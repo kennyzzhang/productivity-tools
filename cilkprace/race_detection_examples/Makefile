@@ -1,10 +1,18 @@
 CXX = ../../../build/bin/clang++
 CSAN_BC := $(shell find ../../../build -name "*cilksan*.bc")
 PRACE_BC := $(shell find ../../../build -name "*cilkprace*.bc")
-OPT = -O0 -v
+OPT = -O3
 CPPFLAGS_NOTOOL = -fopencilk -g $(OPT) -fsanitize=address -fopencilk-enable-pedigrees
 CPPFLAGS_CSAN = -fopencilk -fsanitize=cilk -g $(OPT) -mllvm --enable-static-race-detection=false -mllvm -csi-tool-bitcode=$(CSAN_BC)
-CPPFLAGS_SAN = -fopencilk -fsanitize=cilkprace -g $(OPT) -mllvm -csi-tool-bitcode=$(PRACE_BC)
+CPPFLAGS_SAN = -fopencilk -fsanitize=cilkprace -fopencilk-enable-pedigrees -g $(OPT) -mllvm -csi-tool-bitcode=$(PRACE_BC)
+
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    MAC_SDK_FLAGS = -isysroot $(shell xcrun --show-sdk-path) -L../../../build/lib/clang/21/lib/darwin
+    CPPFLAGS_NOTOOL += $(MAC_SDK_FLAGS)
+    CPPFLAGS_CSAN += $(MAC_SDK_FLAGS)
+    CPPFLAGS_SAN += $(MAC_SDK_FLAGS)
+endif
 
 FILES = blah.cpp fib.cpp memcpy_race.cpp single_spawn_norace.cpp single_spawn_rr_norace.cpp stack_reuse.cpp conditional_sync.cpp  loop.cpp nqueens.cpp single_spawn_race.cpp single_spawn_rw_race.cpp funny_malloc.cpp missed_race.cpp #minimal_race.cpp # strdup.cpp
 
@@ -26,7 +34,7 @@ all: $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
 	$(CXX) $(CPPFLAGS_SAN) $< -o $@
 
 clean:
-	rm $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
+	rm -f $(OUTS_NOTOOL) $(OUTS_CSAN) $(OUTS_SAN)
 
 test:
 	CILK_NWORKERS=1 ./blah.san

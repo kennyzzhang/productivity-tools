@@ -2,15 +2,15 @@
 //#include <cilk/cilk.h>
 
 
-void blah(int& n, const char* msg) {
+void blah(volatile int& n, const char* msg) {
   //std::cout << msg;
   n = 2;
 }
 
 int main()
 {
-  int x;
-  int y;
+  volatile int x;
+  volatile int y;
   blah(x, "base level ");
   cilk_spawn {y = 2;};
   cilk_scope {
