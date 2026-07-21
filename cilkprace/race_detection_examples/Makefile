@@ -9,9 +9,9 @@ CPPFLAGS_SAN = -fopencilk -fsanitize=cilkprace -fopencilk-enable-pedigrees -g $(
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
     MAC_SDK_FLAGS = -isysroot $(shell xcrun --show-sdk-path) -L../../../build/lib/clang/21/lib/darwin
-    CPPFLAGS_NOTOOL += $(MAC_SDK_FLAGS) -lopencilk-asan-personality-c_osx_dynamic -lopencilk-asan-personality-cpp_osx_dynamic
-    CPPFLAGS_CSAN += $(MAC_SDK_FLAGS) -lopencilk-personality-c_osx_dynamic -lopencilk-personality-cpp_osx_dynamic
-    CPPFLAGS_SAN += $(MAC_SDK_FLAGS) -lopencilk-personality-c_osx_dynamic -lopencilk-personality-cpp_osx_dynamic
+    CPPFLAGS_NOTOOL += $(MAC_SDK_FLAGS)
+    CPPFLAGS_CSAN += $(MAC_SDK_FLAGS)
+    CPPFLAGS_SAN += $(MAC_SDK_FLAGS)
 endif
 
 FILES = blah.cpp fib.cpp memcpy_race.cpp single_spawn_norace.cpp single_spawn_rr_norace.cpp stack_reuse.cpp conditional_sync.cpp  loop.cpp nqueens.cpp single_spawn_race.cpp single_spawn_rw_race.cpp funny_malloc.cpp missed_race.cpp #minimal_race.cpp # strdup.cpp
