@@ -1,4 +1,5 @@
 #include <cstdarg>
+#include <typeinfo>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -5198,4 +5199,20 @@ CILKSAN_API void __csan_write(const csi_id_t call_id, const csi_id_t func_id,
     return;
 
   check_read_bytes(call_id, buf_MAAPVal, buf, result);
+}
+
+CILKSAN_API void __csan___cxa_throw(const csi_id_t call_id,
+                                    const csi_id_t func_id, unsigned MAAP_count,
+                                    const call_prop_t prop,
+                                    void *thrown_exception,
+                                    std::type_info *tinfo,
+                                    void (*dest)(void *)) {
+  if (!CILKSAN_INITIALIZED)
+    return;
+
+  if (!should_check())
+    return;
+
+  for (unsigned i = 0; i < MAAP_count; ++i)
+    MAAPs.pop();
 }

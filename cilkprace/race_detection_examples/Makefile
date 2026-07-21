@@ -1,7 +1,7 @@
 CXX = ../../../build/bin/clang++
 CSAN_BC := $(shell find ../../../build -name "*cilksan*.bc")
 PRACE_BC := $(shell find ../../../build -name "*cilkprace*.bc")
-OPT = -O0
+OPT = -O3
 CPPFLAGS_NOTOOL = -fopencilk -g $(OPT) -fsanitize=address -fopencilk-enable-pedigrees
 CPPFLAGS_CSAN = -fopencilk -fsanitize=cilk -g $(OPT) -mllvm --enable-static-race-detection=false -mllvm -csi-tool-bitcode=$(CSAN_BC)
 CPPFLAGS_SAN = -fopencilk -fsanitize=cilkprace -fopencilk-enable-pedigrees -g $(OPT) -mllvm -csi-tool-bitcode=$(PRACE_BC)
