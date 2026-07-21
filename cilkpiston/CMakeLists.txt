@@ -51,7 +51,7 @@ set(CILKPISTON_DYNAMIC_LINK_FLAGS ${CILKPISTON_COMMON_LINK_FLAGS})
 # Setup flags and defs for cilktool bitcode build
 set(CILKPISTON_BITCODE_CFLAGS ${CILKPISTON_CFLAGS} -emit-llvm)
 set(CILKPISTON_BITCODE_DEFINITIONS ${CILKPISTON_COMMON_DEFINITIONS}
-    "CILKPISTON_VIS=__attribute__((noinline))")
+    "CILKSAN_VIS=__attribute__((noinline))")
 
 # Build CilkPiston runtimes shipped with Clang.
 add_cilktools_component(cilkpiston)
