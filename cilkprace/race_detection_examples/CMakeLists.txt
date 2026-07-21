@@ -139,7 +139,7 @@ foreach(test IN LISTS tests)
 endforeach()
 
 if(cilksan IN_LIST variants)
-  foreach(test IN LISTS tests_all)
+  foreach(test IN LISTS tests)
     target_compile_options(${test}.cilksan PRIVATE -fsanitize=cilk)
     target_link_options(${test}.cilksan PRIVATE -fsanitize=cilk)
   endforeach()
