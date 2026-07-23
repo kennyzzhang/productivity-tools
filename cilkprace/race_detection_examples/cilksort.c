@@ -463,7 +463,7 @@ int main(int argc, char **argv) {
 
   /* standard benchmark options */
   check = 0;
-  size = 3000000;
+  size = 10000000;
 
   get_options(argc, argv, specifiers, opt_types, &size, &check, &benchmark,
               &help);
