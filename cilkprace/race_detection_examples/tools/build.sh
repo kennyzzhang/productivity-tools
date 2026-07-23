@@ -54,7 +54,7 @@ pwd
 cmake                                                \
   -DCMAKE_C_COMPILER="$OPENCILK/bin/clang"           \
   -DCMAKE_CXX_COMPILER="$OPENCILK/bin/clang++"       \
-  -DCMAKE_BUILD_TYPE="Debug"                \
+  -DCMAKE_BUILD_TYPE="RelWithDebInfo"                \
   -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"   \
   -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" \
   -DCMAKE_EXPORT_COMPILE_COMMANDS="ON"               \

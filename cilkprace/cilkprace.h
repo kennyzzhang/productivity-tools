@@ -16,7 +16,7 @@
 #include "stack.h"
 
 #define TRACE_CALLS 1
-// #undef TRACE_CALLS
+#undef TRACE_CALLS
 
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
 #define CILKSAN_API extern "C" __attribute__((visibility("default")))
