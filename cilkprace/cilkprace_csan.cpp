@@ -238,6 +238,18 @@ void __csan_after_allocfn(const csi_id_t allocfn_id, const void *addr,
 }
 
 CILKSAN_API
+void __csan_alloc_strdup(const csi_id_t allocfn_id, const csi_id_t func_id,
+                         unsigned MAAP_count, const allocfn_prop_t prop,
+                         char *result, const char *str) {
+#ifdef TRACE_CALLS
+  outs_red << "[W" << worker_number() << "] alloc_strdup(afid=" << allocfn_id
+           << ", fid=" << func_id << ", res=" << (void *)result << ")"
+           << std::endl;
+#endif
+  tool->register_alloc_strdup(result, str);
+}
+
+CILKSAN_API
 void __csan_before_free(const csi_id_t free_id, const void *ptr,
                             const free_prop_t prop) {
 #ifdef TRACE_CALLS

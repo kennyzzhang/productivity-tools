@@ -1,8 +1,10 @@
 #pragma once
+#include <cassert>
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
 #include <cilk/os_label.h>
 #include <cmath>
+#include <cstdlib>
 #include <csi/csi.h>
 #include <cstddef>
 #include <cstdint>
@@ -14,7 +16,7 @@
 #include "stack.h"
 
 #define TRACE_CALLS 1
-#undef TRACE_CALLS
+// #undef TRACE_CALLS
 
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
 #define CILKSAN_API extern "C" __attribute__((visibility("default")))
@@ -100,7 +102,7 @@ __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
 class CilkpraceImpl_t {
   static constexpr size_t vmem_bytes = 0x00007fffffffffff; 
   static constexpr size_t overhead_per_byte = sizeof(shadow_label);
-  static constexpr size_t vmem_shadow_granularity = 1;
+  static constexpr size_t vmem_shadow_granularity = 64;
   static constexpr size_t bytes_per_entry = overhead_per_byte + vmem_shadow_granularity;
   static constexpr size_t vmem_user_addressable_bytes = vmem_bytes / bytes_per_entry * vmem_shadow_granularity;
   static constexpr size_t vmem_shadow_size = vmem_bytes - vmem_user_addressable_bytes;
@@ -109,14 +111,28 @@ class CilkpraceImpl_t {
 
   shadow_label* addr_to_shadow(void* addr)
   {
+    #ifdef TRACE_CALLS
+    outs_red << "addr_to_shadow(" << std::hex << addr << ")" << std::endl;
+    #endif
+    assert((size_t)addr < vmem_bytes && "VMEM BYTES ASSUMPTION VIOLATION");
+
     //TODO: Bounds chekcing?
     // We have to be piecewise. But, we can imagine memory above us as glued on where we are.
     // That is, project the addresses above our shadow memory as if they were just above the lower addresses
     addr = (addr < shadow_mem) ? addr : (void*)((uint8_t*)addr - (uint8_t*)shadow_mem);
 
+    #ifdef TRACE_CALLS
+    outs_red << "addr = " << std::hex << addr << std::endl;
+    #endif
+
     // Now we have to re-scale our address onto our shadow mapping. 
     // Fortunately, since each byte indexes into the array, we can just... index.
     shadow_label* shadow_addr = &((shadow_label*)shadow_mem)[(size_t)addr/vmem_shadow_granularity];
+    
+    if ((uint8_t*)shadow_addr < (uint8_t*)shadow_mem || (uint8_t*)shadow_addr >= (uint8_t*)shadow_mem + vmem_shadow_size) {
+      return nullptr;
+    }
+
     return shadow_addr;
   }
 
@@ -129,8 +145,10 @@ public:
     outs_red << "HAS INIT" << std::endl;
 #endif
     shadow_mem = mmap(nullptr, vmem_shadow_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-    if (shadow_mem == (void*)-1)
+    if (shadow_mem == (void*)-1) {
       perror("SHADOW MEM");
+      exit(1);
+    }
     //outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
     outs_red << "Want mem size: " << vmem_shadow_size << " = 2^" << log2(vmem_shadow_size) << std::endl;
     //outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
@@ -148,10 +166,13 @@ public:
   void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
     bool has_race = false;
     shadow_label* labels = addr_to_shadow((void*)addr);
-    for (size_t i = 0; i < num_bytes; i++)
+    if (!labels) return; //TODO: Complain louder
+    size_t num_granules = (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
+    // Clamp to not walk past end of shadow memory
+    for (size_t i = 0; i < num_granules; i++)
     {
       bool race = labels[i].does_write_race(__cilkrts_get_os_label().label);
-      if (race) outs_red << "WRITE RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
+      if (race) outs_red << "WRITE RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::endl;
       has_race |= race;
     }
     if (has_race) {
@@ -164,10 +185,13 @@ public:
   void register_read(uint64_t addr, size_t num_bytes, source_loc_t store) {
     bool has_race = false;
     shadow_label* labels = addr_to_shadow((void*)addr);
-    for (size_t i = 0; i < num_bytes; i++)
+    if (!labels) return; //TODO: Complain louder
+    
+    size_t num_granules = (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
+    for (size_t i = 0; i < num_granules; i++)
     {
       bool race = labels[i].does_read_race(__cilkrts_get_os_label().label);
-      if (race) outs_red << "READ RACE ON BYTE " << (void*)((uint8_t*) addr + i) << std::endl;
+      if (race) outs_red << "READ RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::endl;
       has_race |= race;
     }
     if (has_race) {
@@ -183,6 +207,10 @@ public:
 
   void register_allocfn(const void* addr, size_t nb) {
    outs_red << "UNHANDLED ALLOCFN" << std::endl;
+  }
+
+  void register_alloc_strdup(const void* addr, const char* str) {
+   outs_red << "UNHANDLED ALLOC_STRDUP" << std::endl;
   }
 
   void register_free(const void* addr) {

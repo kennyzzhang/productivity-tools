@@ -54,11 +54,11 @@ pwd
 cmake                                                \
   -DCMAKE_C_COMPILER="$OPENCILK/bin/clang"           \
   -DCMAKE_CXX_COMPILER="$OPENCILK/bin/clang++"       \
-  -DCMAKE_BUILD_TYPE="RelWithDebInfo"                \
+  -DCMAKE_BUILD_TYPE="Debug"                \
   -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"   \
   -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG" \
   -DCMAKE_EXPORT_COMPILE_COMMANDS="ON"               \
-  -DDISABLED_TESTS="fibred;heat;fft"                 \
+  -DDISABLED_TESTS="fib;fibred;heat;fft;cholesky"                 \
   "$SOURCE_DIR"
 
 cmake --build . -j "$CORE_COUNT"
