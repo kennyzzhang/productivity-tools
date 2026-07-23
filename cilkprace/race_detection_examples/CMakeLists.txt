@@ -69,14 +69,18 @@ macro(list_difference output input1 input2)
   endforeach()
 endmacro()
 
-set(DISABLED_TESTS "" CACHE STRING "Semicolon-separated list of tests to exclude from the build (${all_tests})")
-set(DISABLED_VARIANTS "" CACHE STRING "Semicolon-separated list of variants to exclude from the build (${all_variants})")
+set(DISABLED_TESTS "" CACHE STRING
+  "Semicolon-separated list of tests to exclude from the build (${all_tests})")
+set(DISABLED_VARIANTS "" CACHE STRING
+  "Semicolon-separated list of variants to exclude from the build (${all_variants})")
 
 list_intersect(disabled_tests all_tests DISABLED_TESTS)
 list_intersect(disabled_variants all_variants DISABLED_VARIANTS)
 
-set(DISABLED_TESTS ${disabled_tests} CACHE STRING "Semicolon-separated list of tests to exclude from the build (${all_tests})")
-set(DISABLED_VARIANTS ${disabled_variants} CACHE STRING "Semicolon-separated list of variants to exclude from the build (${all_variants})")
+set(DISABLED_TESTS ${disabled_tests} CACHE STRING
+  "Semicolon-separated list of tests to exclude from the build (${all_tests})")
+set(DISABLED_VARIANTS ${disabled_variants} CACHE STRING
+  "Semicolon-separated list of variants to exclude from the build (${all_variants})")
 
 list_difference(tests all_tests disabled_tests)
 list_difference(variants all_variants disabled_variants)
@@ -84,6 +88,62 @@ list_difference(variants all_variants disabled_variants)
 foreach(test IN LISTS tests)
   foreach(variant IN LISTS variants)
     add_executable(${test}.${variant})
+  endforeach()
+endforeach()
+
+foreach(test IN LISTS tests)
+  foreach(variant IN LISTS variants)
+    # Incredible jank to create a target for a custom command that has the same
+    # name as the output file.
+    #
+    # If you want target a to build file b, the following works:
+    # add_custom_command(OUTPUT b COMMAND ...)
+    # add_custom_target(a DEPENDS b)
+    #
+    # But add_custom_target(a DEPENDS a) makes a circular dependency,
+    # instead of specifying that target a depends on output file a.
+    #
+    # To avoid this shadowing, we rename the output file before running the
+    # custom command, and rename it back afterwards.
+    add_custom_target(${test}.${variant}.time.rename_to_tmp
+      COMMAND [ -e ${test}.${variant}.time ]
+        && mv ${test}.${variant}.time ${test}.${variant}.time.tmp
+        || true
+      VERBATIM)
+    add_custom_command(OUTPUT ${test}.${variant}.time.tmp
+      COMMAND bash -c "(time ./${test}.${variant} &> /dev/null) 2> ${test}.${variant}.time.tmp"
+      DEPENDS ${test}.${variant}
+      DEPENDS ${test}.${variant}.time.rename_to_tmp
+      COMMENT "Timing ${test}.${variant}"
+      VERBATIM
+    )
+    add_custom_target(${test}.${variant}.time
+      COMMAND cmake -E rename ${test}.${variant}.time.tmp ${test}.${variant}.time
+      DEPENDS ${test}.${variant}.time.tmp
+      VERBATIM
+    )
+  endforeach()
+endforeach()
+
+
+foreach(test IN LISTS tests)
+  add_custom_target(${test}.time)
+  foreach(variant IN LISTS variants)
+    add_dependencies(${test}.time ${test}.${variant}.time)
+  endforeach()
+endforeach()
+
+foreach(variant IN LISTS variants)
+  add_custom_target(${variant}.time)
+  foreach(test IN LISTS tests)
+    add_dependencies(${variant}.time ${test}.${variant}.time)
+  endforeach()
+endforeach()
+
+add_custom_target(time)
+foreach(test IN LISTS tests)
+  foreach(variant IN LISTS variants)
+    add_dependencies(time ${test}.${variant}.time)
   endforeach()
 endforeach()
 
