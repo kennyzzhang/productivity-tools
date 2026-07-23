@@ -38,7 +38,7 @@ if (( "$#" < 1 )); then
 fi
 
 OPENCILK="$(realpath -- "$1")"
-SOURCE_DIR="$(realpath -- "$(dirname -- "${BASH_SOURCE[0]}")")"
+SOURCE_DIR="$(realpath -- "$(dirname -- "${BASH_SOURCE[0]}")"/..)"
 BUILD_DIR="$(realpath -- "${2:-build}")"
 
 if [[ "$SOURCE_DIR" == "$BUILD_DIR" ]]; then
