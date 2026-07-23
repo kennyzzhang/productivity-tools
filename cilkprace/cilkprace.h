@@ -102,7 +102,7 @@ __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
 class CilkpraceImpl_t {
   static constexpr size_t vmem_bytes = 0x00007fffffffffff; 
   static constexpr size_t overhead_per_byte = sizeof(shadow_label);
-  static constexpr size_t vmem_shadow_granularity = 64;
+  static constexpr size_t vmem_shadow_granularity = 4;
   static constexpr size_t bytes_per_entry = overhead_per_byte + vmem_shadow_granularity;
   static constexpr size_t vmem_user_addressable_bytes = vmem_bytes / bytes_per_entry * vmem_shadow_granularity;
   static constexpr size_t vmem_shadow_size = vmem_bytes - vmem_user_addressable_bytes;
@@ -163,7 +163,7 @@ public:
   ~CilkpraceImpl_t() {}
 
 
-  void register_write(uint64_t addr, size_t num_bytes, source_loc_t store) {
+  void register_write(uint64_t addr, size_t num_bytes, const source_loc_t* store) {
     bool has_race = false;
     shadow_label* labels = addr_to_shadow((void*)addr);
     if (!labels) return; //TODO: Complain louder
@@ -172,17 +172,18 @@ public:
     for (size_t i = 0; i < num_granules; i++)
     {
       bool race = labels[i].does_write_race(__cilkrts_get_os_label().label);
-      if (race) outs_red << "WRITE RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::endl;
+      if (race) outs_red << "WRITE RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << "(+" << vmem_shadow_granularity << ")" << std::endl;
       has_race |= race;
     }
     if (has_race) {
       outs_red << "BY " <<  __cilkrts_get_os_label().label << std::endl;
-      outs_red << "@ " << store.filename << " Ln " << store.line_number << " Col " << store.column_number << std::endl;
+      if (store)
+        outs_red << "@ " << store->filename << " Ln " << store->line_number << " Col " << store->column_number << std::endl;
       outs_red << "======================" << std::endl;
     }
   }
 
-  void register_read(uint64_t addr, size_t num_bytes, source_loc_t store) {
+  void register_read(uint64_t addr, size_t num_bytes, const source_loc_t* store) {
     bool has_race = false;
     shadow_label* labels = addr_to_shadow((void*)addr);
     if (!labels) return; //TODO: Complain louder
@@ -191,12 +192,13 @@ public:
     for (size_t i = 0; i < num_granules; i++)
     {
       bool race = labels[i].does_read_race(__cilkrts_get_os_label().label);
-      if (race) outs_red << "READ RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::endl;
+      if (race) outs_red << "READ RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << "(+" << vmem_shadow_granularity << ")" << std::endl;
       has_race |= race;
     }
     if (has_race) {
       outs_red << "BY " <<  __cilkrts_get_os_label().label << std::endl;
-      outs_red << "@ " << store.filename << " Ln " << store.line_number << " Col " << store.column_number << std::endl;
+      if (store)
+        outs_red << "@ " << store->filename << " Ln " << store->line_number << " Col " << store->column_number << std::endl;
       outs_red << "======================" << std::endl;
     }
   }

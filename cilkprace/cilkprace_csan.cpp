@@ -78,7 +78,7 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
   //  return;
   if (!HAS_INIT) return;
   auto store = (const source_loc_t*) __csan_get_load_source_loc(load_id);
-  tool->register_read((uint64_t)addr, num_bytes, *store);
+  tool->register_read((uint64_t)addr, num_bytes, store);
 }
 
 CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
@@ -99,7 +99,7 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
   //  return;
   if (!HAS_INIT) return;
   auto store = (const source_loc_t*) __csan_get_load_source_loc(load_id);
-  tool->register_read((uint64_t)addr, num_bytes, *store);
+  tool->register_read((uint64_t)addr, num_bytes, store);
 }
 
 CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
@@ -116,7 +116,7 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
   //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   if (!HAS_INIT) return;
   auto store = (const source_loc_t*) __csan_get_store_source_loc(store_id);
-  tool->register_write((uint64_t)addr, num_bytes, *store);
+  tool->register_write((uint64_t)addr, num_bytes, store);
 }
 
 CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
@@ -133,7 +133,7 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
   //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   if (!HAS_INIT) return;
   auto store = (const source_loc_t*) __csan_get_store_source_loc(store_id);
-  tool->register_write((uint64_t)addr, num_bytes, *store);
+  tool->register_write((uint64_t)addr, num_bytes, store);
 }
 
 CILKSAN_API void __csan_task(const csi_id_t task_id, const csi_id_t detach_id,
@@ -322,7 +322,7 @@ void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
   outs_red << "CHECK READ ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Mod)) {
-    tool->register_read((uint64_t)ptr, len, *store);
+    tool->register_read((uint64_t)ptr, len, store);
   }
 }
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
@@ -340,7 +340,7 @@ void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
   outs_red << "CHECK WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Ref)) {
-    tool->register_write((uint64_t)ptr, len, *store);
+    tool->register_write((uint64_t)ptr, len, store);
   }
 }
 
