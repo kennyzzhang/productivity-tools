@@ -54,12 +54,16 @@ int main(int argc, char *argv[]) {
 
   int n, result;
 
-  if (argc != 2) {
+  n = 36;
+
+  if (argc < 2) {
     fprintf(stderr, "Usage: fib [<cilk options>] <n>\n");
-    exit(1);
+    fprintf(stderr, "Use default n = %d", n);
+  } else {
+    n = atoi(argv[1]);
+    fprintf(stderr, "Running %s with n = %d", argv[0], n);
   }
 
-  n = atoi(argv[1]);
   struct timeval t1, t2;
   gettimeofday(&t1, 0);
   result = fib(n);

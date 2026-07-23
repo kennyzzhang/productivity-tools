@@ -475,9 +475,9 @@ int main(int argc, char *argv[]) {
   int benchmark, help, t;
 
   /* standard benchmark options */
-  int x = 128;
-  int y = 128;
-  int z = 128;
+  int x = 1024;
+  int y = 1024;
+  int z = 1024;
   int check = 0;
 
   get_options(argc, argv, specifiers, opt_types, &x, &y, &z, &check, &benchmark,

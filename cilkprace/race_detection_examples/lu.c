@@ -48,7 +48,7 @@ unsigned long long todval(struct timeval *tp) {
 
 /* Define the default matrix size. */
 #ifndef DEFAULT_SIZE
-#define DEFAULT_SIZE (16 * BLOCK_SIZE)
+#define DEFAULT_SIZE (64 * BLOCK_SIZE)
 #endif
 
 /* A block is a 2D array of doubles. */

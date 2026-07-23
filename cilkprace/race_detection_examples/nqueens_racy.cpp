@@ -82,7 +82,7 @@ int nqueens (int n, int j, char *a) {
 
 int main(int argc, char *argv[]) { 
 
-  int n = 13;
+  int n = 12;
   char *a;
   int res;
 
