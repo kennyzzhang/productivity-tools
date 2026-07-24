@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <ostream>
 #include <sys/mman.h>
+#include <unistd.h>
 #include "csan.h"
 
 #include "outs_red.h"
@@ -140,7 +141,6 @@ class CilkpraceImpl_t {
 public:
   CilkpraceImpl_t() 
   {
-    HAS_INIT = true;
 #ifdef TRACE_CALLS
     outs_red << "HAS INIT" << std::endl;
 #endif
@@ -158,6 +158,7 @@ public:
     // Push a default value of 0 onto the MAAP_counts stack, in case this
     // function contains get_MAAP calls.
     //MAAP_counts.push_back(0);
+    HAS_INIT = true;
   }
 
   ~CilkpraceImpl_t() {}
@@ -204,7 +205,31 @@ public:
   }
 
   void register_alloca(const void* addr, size_t nb) {
-   outs_red << "UNHANDLED ALLOCA" << std::endl;
+    shadow_label* labels = addr_to_shadow((void*)addr);
+    if (!labels) return;
+    size_t num_granules = (nb + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
+    size_t shadow_bytes = num_granules * sizeof(shadow_label);
+    uint8_t* start = (uint8_t*)labels;
+    uint8_t* end = start + shadow_bytes;
+
+    // Page-align inward for madvise
+    static const size_t page_size = sysconf(_SC_PAGESIZE);
+    uint8_t* page_start = (uint8_t*)(((uintptr_t)start + page_size - 1) & ~(page_size - 1));
+    uint8_t* page_end   = (uint8_t*)((uintptr_t)end & ~(page_size - 1));
+
+    if (page_start < page_end) {
+      // memset sub-page head
+      if (start < page_start)
+        memset(start, 0, page_start - start);
+      // Lazy zero the page-aligned bulk — kernel zeros on next access
+      madvise(page_start, page_end - page_start, MADV_FREE);
+      // memset sub-page tail
+      if (page_end < end)
+        memset(page_end, 0, end - page_end);
+    } else {
+      // Too small for madvise, just memset the whole thing
+      memset(start, 0, shadow_bytes);
+    }
   }
 
   void register_allocfn(const void* addr, size_t nb) {
