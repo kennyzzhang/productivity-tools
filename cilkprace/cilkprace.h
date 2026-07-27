@@ -173,14 +173,15 @@ public:
     for (size_t i = 0; i < num_granules; i++)
     {
       bool race = labels[i].does_write_race(__cilkrts_get_os_label().label);
-      if (race) outs_red << "WRITE RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << "(+" << vmem_shadow_granularity << ")" << std::endl;
+      if (race) outs_red << "WRITE RACE ON BYTE " << std::hex << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::dec << "(+" << vmem_shadow_granularity << ") BY " << std::dec << __cilkrts_get_os_label().label << " WITH " << labels[i] << std::endl; // << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::dec << "(+" << vmem_shadow_granularity << ")" << std::endl;
       has_race |= race;
     }
     if (has_race) {
-      outs_red << "BY " <<  __cilkrts_get_os_label().label << std::endl;
+      outs_red << "BY " << std::dec << __cilkrts_get_os_label().label << std::endl;
       if (store)
-        outs_red << "@ " << store->filename << " Ln " << store->line_number << " Col " << store->column_number << std::endl;
+        outs_red << "@ " << store->filename << " Ln " << std::dec << store->line_number << " Col " << std::dec << store->column_number << std::endl;
       outs_red << "======================" << std::endl;
+      exit(EXIT_FAILURE);
     }
   }
 
@@ -193,14 +194,15 @@ public:
     for (size_t i = 0; i < num_granules; i++)
     {
       bool race = labels[i].does_read_race(__cilkrts_get_os_label().label);
-      if (race) outs_red << "READ RACE ON BYTE " << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << "(+" << vmem_shadow_granularity << ")" << std::endl;
+      if (race) outs_red << "READ RACE ON BYTE " << std::hex << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::dec << "(+" << vmem_shadow_granularity << ") BY " << std::dec << __cilkrts_get_os_label().label << " WITH " << labels[i] << std::endl; // << (void*)((uint8_t*) addr + i * vmem_shadow_granularity) << std::dec << "(+" << vmem_shadow_granularity << ")" << std::endl;
       has_race |= race;
     }
     if (has_race) {
-      outs_red << "BY " <<  __cilkrts_get_os_label().label << std::endl;
+      outs_red << "BY " << std::dec << __cilkrts_get_os_label().label << std::endl;
       if (store)
-        outs_red << "@ " << store->filename << " Ln " << store->line_number << " Col " << store->column_number << std::endl;
+        outs_red << "@ " << store->filename << " Ln " << std::dec << store->line_number << " Col " << std::dec << store->column_number << std::endl;
       outs_red << "======================" << std::endl;
+      exit(EXIT_FAILURE);
     }
   }
 
@@ -233,11 +235,12 @@ public:
   }
 
   void register_allocfn(const void* addr, size_t nb) {
-   outs_red << "UNHANDLED ALLOCFN" << std::endl;
+    register_alloca(addr, nb);
   }
 
   void register_alloc_strdup(const void* addr, const char* str) {
-   outs_red << "UNHANDLED ALLOC_STRDUP" << std::endl;
+    if (addr && str)
+      register_alloca(addr, strlen(str) + 1);
   }
 
   void register_free(const void* addr) {

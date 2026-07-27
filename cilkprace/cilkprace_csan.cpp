@@ -234,7 +234,7 @@ void __csan_after_allocfn(const csi_id_t allocfn_id, const void *addr,
       << alignment << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty
       << ")" << std::endl;
 #endif
-  tool->register_allocfn(addr, num);
+  tool->register_allocfn(addr, size * num);
 }
 
 CILKSAN_API
