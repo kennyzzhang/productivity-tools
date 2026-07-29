@@ -769,8 +769,8 @@ int main(int argc, char *argv[]) {
 
   /* standard benchmark options */
   filename[0] = 0;
-  size = 500;
-  nonzeros = 1000;
+  size = 1000;
+  nonzeros = 10000;
 
   get_options(argc, argv, specifiers, opt_types, &size, &nonzeros, &check,
               filename, &benchmark, &help);
