@@ -106,20 +106,21 @@ foreach(test IN LISTS tests)
     # To avoid this shadowing, we rename the output file before running the
     # custom command, and rename it back afterwards.
     add_custom_target(${test}.${variant}.time.rename_to_tmp
-      COMMAND [ -e ${test}.${variant}.time ]
-        && mv ${test}.${variant}.time ${test}.${variant}.time.tmp
+      COMMAND [ -e ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time ]
+        && mv ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time.tmp
         || true
       VERBATIM)
-    add_custom_command(OUTPUT ${test}.${variant}.time.tmp
-      COMMAND bash -c "(time ./${test}.${variant} &> /dev/null) 2> ${test}.${variant}.time.tmp"
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time.tmp
+      COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant} &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time.tmp"
       DEPENDS ${test}.${variant}
       DEPENDS ${test}.${variant}.time.rename_to_tmp
       COMMENT "Timing ${test}.${variant}"
       VERBATIM
     )
     add_custom_target(${test}.${variant}.time
-      COMMAND cmake -E rename ${test}.${variant}.time.tmp ${test}.${variant}.time
-      DEPENDS ${test}.${variant}.time.tmp
+      COMMAND cmake -E rename ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time.tmp ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time.tmp
+      BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time
       VERBATIM
     )
   endforeach()
