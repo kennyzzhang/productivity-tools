@@ -121,8 +121,11 @@ foreach(test IN LISTS tests)
     add_custom_target(${test}.${variant}.time
       COMMAND cmake -E rename ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time.tmp ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time
       DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time.tmp
-      BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time
       VERBATIM
+    )
+    set_target_properties(${test}.${variant}.time
+      PROPERTIES
+      ADDITIONAL_CLEAN_FILES ${CMAKE_CURRENT_BINARY_DIR}/${test}.${variant}.time
     )
   endforeach()
 endforeach()
