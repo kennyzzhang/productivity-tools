@@ -10,3 +10,5 @@ multi_arch
 cilkprace/race_detection_examples/loop
 cilkprace/race_detection_examples/*.dSYM
 cilkprace/race_detection_examples/single_spawn_norace
+cilkprace/race_detection_examples/.cache
+cilkprace/race_detection_examples/build
