@@ -16,12 +16,12 @@ set(all_tests_c
 )
 
 set(all_tests_cpp
-  label_test
   blah
   conditional_sync
   fibred
   funny_malloc
   heap_reuse
+  label_test
   loop
   memcpy_race
   missed_race
