@@ -1,4 +1,5 @@
 //#include <cilk/cilk.h>
+#include <stdio.h>
 
 
 void blah(volatile int& n, const char* msg) {
@@ -8,8 +9,8 @@ void blah(volatile int& n, const char* msg) {
 
 int main()
 {
-  volatile int x;
-  volatile int y;
+  volatile int x = 1;
+  volatile int y = 1;
   blah(x, "base level ");
   cilk_spawn {y = 2;};
   cilk_scope {

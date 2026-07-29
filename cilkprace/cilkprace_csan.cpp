@@ -182,18 +182,20 @@ void __csan_detach_continue(const csi_id_t detach_continue_id,
 CILKSAN_API
 void __csan_before_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 #ifdef TRACE_CALLS
+  __cilkrts_os_label lbl = __cilkrts_get_os_label();
   outs_red
       << "[W" << worker_number() << "] before_sync(sid=" << sync_id << ", sr="
-      << sync_reg << ")" << std::endl;
+      << sync_reg << ") label: " << lbl.label << std::endl;
 #endif
 }
 
 CILKSAN_API
 void __csan_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
 #ifdef TRACE_CALLS
+  __cilkrts_os_label lbl = __cilkrts_get_os_label();
   outs_red
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
-      << sync_reg << ")" << std::endl;
+      << sync_reg << ") label: " << lbl.label << std::endl;
 #endif
   
 }
@@ -319,7 +321,7 @@ void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
   if (!HAS_INIT) return;
   auto store = (const source_loc_t*) __csan_get_load_source_loc(call_id);
 #ifdef TRACE_CALLS
-  outs_red << "CHECK READ ON (" << store->name << ", " << store->line_number << ")" << std::endl;
+  outs_red << "CHECK READ ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Mod)) {
     tool->register_read((uint64_t)ptr, len, store);
@@ -337,7 +339,7 @@ void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
   if (!HAS_INIT) return;
   auto store = (const source_loc_t*) __csan_get_store_source_loc(call_id);
 #ifdef TRACE_CALLS
-  outs_red << "CHECK WRITE ON (" << store->name << ", " << store->line_number << ")" << std::endl;
+  outs_red << "CHECK WRITE ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Ref)) {
     tool->register_write((uint64_t)ptr, len, store);
