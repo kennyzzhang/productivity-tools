@@ -1,3 +1,10 @@
+#if !defined(__cilk) || !defined(__cilk_pedigrees__)
+#include <iostream>
+int main() {
+    std::cerr << "Skipping Cilk OS Label Determinism Tests (nocilk or pedigrees disabled).\n";
+    return 0;
+}
+#else
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
 #include <iostream>
@@ -203,3 +210,4 @@ int main() {
     
     return total_fails > 0 ? 1 : 0;
 }
+#endif
