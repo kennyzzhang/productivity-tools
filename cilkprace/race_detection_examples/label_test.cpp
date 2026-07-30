@@ -165,6 +165,25 @@ int test_multiple_syncs(std::vector<uint8_t> base) {
     return fails;
 }
 
+int test_cilk_scope(std::vector<uint8_t> base) {
+    int fails = 0;
+    fails += verify_label(base, "test_cilk_scope entry");
+    
+    int x = 0;
+    int y = 0;
+    cilk_scope {
+        int c = cilk_spawn [&]() { x = 1; return verify_label(append_label(base, {1}), "test_cilk_scope child"); }();
+        y = 2;
+        fails += verify_label(append_label(base, {0}), "test_cilk_scope continuation");
+        fails += c;
+    }
+    
+    std::vector<uint8_t> after_sync = sync_label(base, 1);
+    fails += verify_label(after_sync, "test_cilk_scope after scope");
+    
+    return fails;
+}
+
 int main() {
     std::cerr << "Starting Cilk OS Label Determinism Tests...\n";
     int total_fails = 0;
@@ -197,6 +216,12 @@ int main() {
     cilk_sync;
     base = sync_label(base, 1);
     total_fails += cf4 + verify_label(base, "main after test_multiple_syncs");
+    
+    int cf5 = cilk_spawn test_cilk_scope(append_label(base, {1}));
+    total_fails += verify_label(append_label(base, {0}), "main after test_cilk_scope continuation");
+    cilk_sync;
+    base = sync_label(base, 1);
+    total_fails += cf5 + verify_label(base, "main after test_cilk_scope");
     
     std::cerr << "-------------------------------------------\n";
     std::cerr << "Test Summary:\n";

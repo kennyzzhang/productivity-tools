@@ -229,3 +229,8 @@ if(cilkpiston IN_LIST variants)
 endif()
 
 
+
+foreach(variant IN LISTS has_cilk)
+  target_compile_options(label_test.${variant} PRIVATE -fopencilk-enable-pedigrees)
+  target_link_options(label_test.${variant} PRIVATE -fopencilk-enable-pedigrees)
+endforeach()
