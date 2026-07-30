@@ -216,7 +216,7 @@ endif()
 
 if(cilkprace IN_LIST variants)
   foreach(test IN LISTS tests)
-    target_compile_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace)
+    target_compile_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace -fopencilk-enable-pedigrees)
     target_link_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace -fopencilk-enable-pedigrees)
   endforeach()
 endif()
