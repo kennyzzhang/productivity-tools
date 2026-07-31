@@ -9,9 +9,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <ostream>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <dlfcn.h>
 
 #include "outs_red.h"
 #include "stack.h"
@@ -114,6 +116,7 @@ class CilkpraceImpl_t {
       vmem_bytes - vmem_user_addressable_bytes;
 
   void *shadow_mem;
+  bool ignore_stdlib_races;
 
   shadow_label *addr_to_shadow(void *addr) {
 #ifdef TRACE_CALLS
@@ -163,6 +166,13 @@ public:
              << log2(vmem_shadow_size) << std::endl;
     // outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
 
+    const char *env_val = getenv("CILKPRACE_IGNORE_STDLIB_RACES");
+    if (env_val && strcmp(env_val, "0") == 0) {
+      ignore_stdlib_races = false;
+    } else {
+      ignore_stdlib_races = true;
+    }
+
     // Note that we start executing the program in series.
     // parallel_execution.push_back(0);
     // Push a default value of 0 onto the MAAP_counts stack, in case this
@@ -172,6 +182,18 @@ public:
   }
 
   ~CilkpraceImpl_t() {}
+
+  bool is_benign_stdlib_race(uint64_t race_addr) {
+    if (!ignore_stdlib_races) return false;
+    Dl_info info;
+    if (dladdr((void*)race_addr, &info) && info.dli_sname) {
+      if (strstr(info.dli_sname, "cout") != nullptr ||
+          strstr(info.dli_sname, "cerr") != nullptr) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   void register_write(uint64_t addr, size_t num_bytes,
                       const source_loc_t *store) {
@@ -184,7 +206,9 @@ public:
     // Clamp to not walk past end of shadow memory
     for (size_t i = 0; i < num_granules; i++) {
       bool race = labels[i].does_write_race(__cilkrts_get_os_label().label);
-      if (race)
+      if (race) {
+        if (is_benign_stdlib_race(addr + i * vmem_shadow_granularity))
+          continue;
         outs_red
             << "WRITE RACE ON BYTE " << std::hex
             << (void *)((uint8_t *)addr + i * vmem_shadow_granularity)
@@ -194,7 +218,8 @@ public:
             << std::endl; // << (void*)((uint8_t*) addr + i *
                           // vmem_shadow_granularity) << std::dec << "(+" <<
                           // vmem_shadow_granularity << ")" << std::endl;
-      has_race |= race;
+        has_race = true;
+      }
     }
     if (has_race) {
       outs_red << "BY " << std::dec << __cilkrts_get_os_label().label
@@ -219,7 +244,9 @@ public:
         (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
     for (size_t i = 0; i < num_granules; i++) {
       bool race = labels[i].does_read_race(__cilkrts_get_os_label().label);
-      if (race)
+      if (race) {
+        if (is_benign_stdlib_race(addr + i * vmem_shadow_granularity))
+          continue;
         outs_red
             << "READ RACE ON BYTE " << std::hex
             << (void *)((uint8_t *)addr + i * vmem_shadow_granularity)
@@ -229,7 +256,8 @@ public:
             << std::endl; // << (void*)((uint8_t*) addr + i *
                           // vmem_shadow_granularity) << std::dec << "(+" <<
                           // vmem_shadow_granularity << ")" << std::endl;
-      has_race |= race;
+        has_race = true;
+      }
     }
     if (has_race) {
       outs_red << "BY " << std::dec << __cilkrts_get_os_label().label
@@ -250,28 +278,7 @@ public:
     size_t num_granules =
         (nb + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
     size_t shadow_bytes = num_granules * sizeof(shadow_label);
-    uint8_t *start = (uint8_t *)labels;
-    uint8_t *end = start + shadow_bytes;
-
-    // Page-align inward for madvise
-    static const size_t page_size = sysconf(_SC_PAGESIZE);
-    uint8_t *page_start =
-        (uint8_t *)(((uintptr_t)start + page_size - 1) & ~(page_size - 1));
-    uint8_t *page_end = (uint8_t *)((uintptr_t)end & ~(page_size - 1));
-
-    if (page_start < page_end) {
-      // memset sub-page head
-      if (start < page_start)
-        memset(start, 0, page_start - start);
-      // Lazy zero the page-aligned bulk — kernel zeros on next access
-      madvise(page_start, page_end - page_start, MADV_FREE);
-      // memset sub-page tail
-      if (page_end < end)
-        memset(page_end, 0, end - page_end);
-    } else {
-      // Too small for madvise, just memset the whole thing
-      memset(start, 0, shadow_bytes);
-    }
+    memset(labels, 0, shadow_bytes);
   }
 
   void register_allocfn(const void *addr, size_t nb) {

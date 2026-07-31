@@ -81,6 +81,19 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
   tool->register_read((uint64_t)addr, num_bytes, store);
 }
 
+CILKSAN_API void __csan_before_loop(const csi_id_t loop_id,
+                                    const int64_t line_no,
+                                    const csi_id_t *stripmined_loop_id) {
+}
+
+CILKSAN_API void __csan_after_loop(const csi_id_t loop_id,
+                                   const int64_t line_no,
+                                   const csi_id_t *stripmined_loop_id) {
+}
+
+CILKSAN_API void __csan_destroy_loop(const csi_id_t loop_id) {
+}
+
 CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
                            int32_t num_bytes, const load_prop_t prop) {
 #ifdef TRACE_CALLS
