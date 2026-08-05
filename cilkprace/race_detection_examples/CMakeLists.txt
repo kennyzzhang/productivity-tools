@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.20.0)
 project(CilkBenchmarks C CXX)
 
+include(ExternalProject)
+
+#load_cache(${LLVM_CMAKE_DIR} READ_WITH_PREFIX OPENCILK_ LLVM_SOURCE_DIRECTORY)
+
 set(all_tests_c
   cholesky
   cilksort
@@ -70,10 +74,21 @@ macro(list_difference output input1 input2)
   endforeach()
 endmacro()
 
+execute_process(
+  COMMAND bash -c "${CMAKE_C_COMPILER} --version | awk '/Target: /{ print $2 }'"
+  OUTPUT_VARIABLE default_arch
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+set(ARCH ${default_arch} CACHE STRING "Native architecture, should match opencilk build architecture")
+mark_as_advanced(ARCH)
+
 set(DISABLED_TESTS "" CACHE STRING
   "Semicolon-separated list of tests to exclude from the build (${all_tests})")
 set(DISABLED_VARIANTS "" CACHE STRING
   "Semicolon-separated list of variants to exclude from the build (${all_variants})")
+set(EXTRA_TARGET_COMMITS "" CACHE STRING
+  "Semicolon-separated list of test.variant.commit to build")
 
 list_intersect(disabled_tests all_tests DISABLED_TESTS)
 list_intersect(disabled_variants all_variants DISABLED_VARIANTS)
@@ -86,11 +101,138 @@ set(DISABLED_VARIANTS ${disabled_variants} CACHE STRING
 list_difference(tests all_tests disabled_tests)
 list_difference(variants all_variants disabled_variants)
 
+
+
+
+foreach(test IN LISTS all_tests)
+  foreach(variant IN LISTS all_variants)
+    add_library(${test}.${variant}.if INTERFACE)
+  endforeach()
+endforeach()
+
+add_library(getoptions OBJECT getoptions.c)
+foreach(test IN LISTS all_needs_getoptions)
+  foreach(variant IN LISTS all_variants)
+    target_link_libraries(${test}.${variant}.if INTERFACE $<TARGET_OBJECTS:getoptions>)
+  endforeach()
+endforeach()
+
+foreach(test IN LISTS all_needs_lm)
+  foreach(variant IN LISTS all_variants)
+    target_link_libraries(${test}.${variant}.if INTERFACE m)
+  endforeach()
+endforeach()
+
+foreach(test IN LISTS all_tests_c)
+  foreach(variant IN LISTS all_variants)
+    target_sources(${test}.${variant}.if INTERFACE ${test}.c)
+  endforeach()
+endforeach()
+
+foreach(test IN LISTS all_tests_cpp)
+  foreach(variant IN LISTS all_variants)
+    target_sources(${test}.${variant}.if INTERFACE ${test}.cpp)
+  endforeach()
+endforeach()
+
+foreach(test IN LISTS all_tests)
+  target_compile_options(${test}.nocilk.if INTERFACE -ftapir=serial -includecilk/cilk_stub.h)
+  target_link_options(${test}.nocilk.if INTERFACE -ftapir=serial)
+endforeach()
+
+foreach(test IN LISTS all_tests)
+  foreach(variant IN LISTS all_has_cilk)
+    target_compile_options(${test}.${variant}.if INTERFACE -fopencilk)
+    target_link_options(${test}.${variant}.if INTERFACE -fopencilk)
+  endforeach()
+endforeach()
+
+foreach(test IN LISTS all_tests)
+  foreach(variant IN LISTS all_race_detectors)
+    target_compile_options(${test}.${variant}.if INTERFACE "SHELL:-mllvm -enable-static-race-detection=false")
+  endforeach()
+endforeach()
+
+foreach(test IN LISTS all_tests)
+  target_compile_options(${test}.cilksan.if INTERFACE -fsanitize=cilk)
+endforeach()
+
+foreach(test IN LISTS all_tests)
+  target_compile_options(${test}.cilkprace.if INTERFACE -fsanitize=cilkprace)
+  target_link_options(${test}.cilkprace.if INTERFACE -fopencilk-enable-pedigrees)
+endforeach()
+
+foreach(test IN LISTS all_tests)
+  target_compile_options(${test}.cilkpiston.if INTERFACE -fsanitize=cilkpiston)
+endforeach()
+
+foreach(variant IN LISTS all_has_cilk)
+  target_compile_options(label_test.${variant}.if INTERFACE -fopencilk-enable-pedigrees)
+  target_link_options(label_test.${variant}.if INTERFACE -fopencilk-enable-pedigrees)
+endforeach()
+
+
+
+
 foreach(test IN LISTS tests)
   foreach(variant IN LISTS variants)
     add_executable(${test}.${variant})
+    target_link_libraries(${test}.${variant} ${test}.${variant}.if)
   endforeach()
 endforeach()
+
+foreach(test IN LISTS tests)
+  target_link_options(${test}.cilksan PRIVATE -fsanitize=cilk)
+  target_link_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace)
+  target_link_options(${test}.cilkpiston PRIVATE -fsanitize=cilkpiston)
+endforeach()
+
+
+set_property(DIRECTORY PROPERTY ADDITIONAL_CLEAN_FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/runtimes
+)
+set(added_commits)
+foreach(extra_target_commits IN LISTS EXTRA_TARGET_COMMITS)
+  if(extra_target_commits MATCHES "^([^.]*)\.([^.]*)\.(.*)$")
+    set(extra_test ${CMAKE_MATCH_1})
+    set(extra_variant ${CMAKE_MATCH_2})
+    set(extra_commit ${CMAKE_MATCH_3})
+
+    set(extra_target ${extra_test}.${extra_variant})
+    set(extra_target_commit ${extra_target}.${extra_commit})
+    set(extra_commit_name cilktools.${extra_commit})
+
+    if(NOT extra_commit IN_LIST added_commits)
+      list(APPEND added_commits ${extra_commit})
+      ExternalProject_Add(
+        ${extra_commit_name}
+        PREFIX runtimes/${extra_commit_name}
+        GIT_REPOSITORY git@github.com:kennyzzhang/productivity-tools.git
+        GIT_TAG ${extra_commit}
+        CMAKE_ARGS
+          -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+          -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+          -DLLVM_CMAKE_DIR=${LLVM_CMAKE_DIR}
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+          -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
+          #    -DLLVM_COMMON_CMAKE_UTILS=${OPENCILK_LLVM_SOURCE_DIRECTORY}/../cmake
+          #    -DLLVM_MAIN_SRC_DIR=${OPENCILK_LLVM_SOURCE_DIRECTORY}
+        INSTALL_COMMAND ""
+      )
+    endif()
+
+    add_executable(${extra_target_commit})
+    add_dependencies(${extra_target_commit} ${extra_commit_name})
+    target_link_libraries(${extra_target_commit}
+      ${extra_target}.if
+      ${CMAKE_CURRENT_BINARY_DIR}/runtimes/${extra_commit_name}/src/${extra_commit_name}-build/lib/${ARCH}/libclang_rt.${extra_variant}.a
+      stdc++
+    )
+  endif()
+endforeach()
+
+
 
 foreach(test IN LISTS tests)
   foreach(variant IN LISTS variants)
@@ -154,83 +296,4 @@ foreach(test IN LISTS tests)
   foreach(variant IN LISTS variants)
     add_dependencies(time ${test}.${variant}.time)
   endforeach()
-endforeach()
-
-list_intersect(needs_getoptions all_needs_getoptions tests)
-add_library(getoptions OBJECT getoptions.c)
-foreach(test IN LISTS needs_getoptions)
-  foreach(variant IN LISTS variants)
-    target_link_libraries(${test}.${variant} PRIVATE $<TARGET_OBJECTS:getoptions>)
-  endforeach()
-endforeach()
-
-list_intersect(needs_lm all_needs_lm tests)
-foreach(test IN LISTS needs_lm)
-  foreach(variant IN LISTS variants)
-    target_link_libraries(${test}.${variant} PRIVATE m)
-  endforeach()
-endforeach()
-
-list_intersect(tests_c all_tests_c tests)
-foreach(test IN LISTS tests_c)
-  foreach(variant IN LISTS variants)
-    target_sources(${test}.${variant} PRIVATE ${test}.c)
-  endforeach()
-endforeach()
-
-list_intersect(tests_cpp all_tests_cpp tests)
-foreach(test IN LISTS tests_cpp)
-  foreach(variant IN LISTS variants)
-    target_sources(${test}.${variant} PRIVATE ${test}.cpp)
-  endforeach()
-endforeach()
-
-if(nocilk IN_LIST variants)
-  foreach(test IN LISTS tests)
-    target_compile_options(${test}.nocilk PRIVATE -ftapir=serial -includecilk/cilk_stub.h)
-    target_link_options(${test}.nocilk PRIVATE -ftapir=serial)
-  endforeach()
-endif()
-
-list_intersect(has_cilk all_has_cilk variants)
-foreach(test IN LISTS tests)
-  foreach(variant IN LISTS has_cilk)
-    target_compile_options(${test}.${variant} PRIVATE -fopencilk)
-    target_link_options(${test}.${variant} PRIVATE -fopencilk)
-  endforeach()
-endforeach()
-
-list_intersect(race_detectors all_race_detectors variants)
-foreach(test IN LISTS tests)
-  foreach(variant IN LISTS race_detectors)
-    target_compile_options(${test}.${variant} PRIVATE "SHELL:-mllvm -enable-static-race-detection=false")
-  endforeach()
-endforeach()
-
-if(cilksan IN_LIST variants)
-  foreach(test IN LISTS tests)
-    target_compile_options(${test}.cilksan PRIVATE -fsanitize=cilk)
-    target_link_options(${test}.cilksan PRIVATE -fsanitize=cilk)
-  endforeach()
-endif()
-
-if(cilkprace IN_LIST variants)
-  foreach(test IN LISTS tests)
-    target_compile_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace)
-    target_link_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace)
-  endforeach()
-endif()
-
-if(cilkpiston IN_LIST variants)
-  foreach(test IN LISTS tests)
-    target_compile_options(${test}.cilkpiston PRIVATE -fsanitize=cilkpiston)
-    target_link_options(${test}.cilkpiston PRIVATE -fsanitize=cilkpiston)
-  endforeach()
-endif()
-
-
-
-foreach(variant IN LISTS has_cilk)
-  target_compile_options(label_test.${variant} PRIVATE -fopencilk-enable-pedigrees)
-  target_link_options(label_test.${variant} PRIVATE -fopencilk-enable-pedigrees)
 endforeach()
