@@ -61,7 +61,7 @@ cmake                                                                          \
   -DCMAKE_EXPORT_COMPILE_COMMANDS="ON"                                         \
   -DDISABLED_TESTS="fibred;heat;fft"                                           \
   -DEXTRA_TARGET_COMMITS="$(printf "%s"                                        \
-    "*.cilkpiston.f1203518f71b8ed7638763dfdf736a269a7ce4fe;"                   \
+    "*.cilkpiston.cilkpiston-stubhooks-noinline;"                              \
     "cholesky.cilkprace.f1203518f71b8ed7638763dfdf736a269a7ce4fe;"             \
   )"                                                                           \
   "$SOURCE_DIR"                                                                \
