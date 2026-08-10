@@ -33,17 +33,14 @@
 
 #include "getoptions.h"
 #include <math.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
+#include <string.h>
+#include "timing.h"
 
 #ifdef SERIAL
 #include <cilk/cilk_stub.h>
 #endif
 
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
 
 #ifndef RAND_MAX
 #define RAND_MAX 32767
@@ -289,8 +286,8 @@ void mat_vec_mul(REAL *A, REAL *R, REAL *P, int m, int n, int ld, int add) {
   }
 }
 
-const char *specifiers[] = {"-n", "-c", "-rc", "-h", 0};
-int opt_types[] = {INTARG, BOOLARG, BOOLARG, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-c", "-rc", "-h", "-i", 0};
+int opt_types[] = {INTARG, BOOLARG, BOOLARG, BOOLARG, INTARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -301,8 +298,10 @@ int main(int argc, char *argv[]) {
   REAL *C2;
   double err;
 
+  int iterations = 1;
+
   get_options(argc, argv, specifiers, opt_types, &n, &check, &rand_check,
-              &help);
+              &help, &iterations);
 
   if (help) {
     fprintf(stderr,
@@ -336,15 +335,16 @@ int main(int argc, char *argv[]) {
   fprintf(stderr,
           "\nCalculate using recursive method ... (timing start here)\n");
 
-  /* initialization and reset */
-  zero(C, n);
+  for (int iter = 0; iter < iterations; iter++) {
+    /* initialization and reset */
+    zero(C, n);
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
-  rec_matmul(A, B, C, n, n, n, n);
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+    timer_start();
+    rec_matmul(A, B, C, n, n, n, n);
+    record_time(timer_stop_ms());
+  }
+
+  report_time();
 
   if (rand_check) {
     mat_vec_mul(B, R, P1, n, n, n, 0);

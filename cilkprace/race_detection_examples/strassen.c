@@ -33,15 +33,13 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
+#include "timing.h"
 
 #ifdef SERIAL
 #include <cilk/cilk_stub.h>
 #endif
 
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
+
 
 #ifndef RAND_MAX
 #define RAND_MAX 32767
@@ -771,8 +769,8 @@ int usage(void) {
   return 1;
 }
 
-const char *specifiers[] = {"-n", "-c", "-rc", "-benchmark", "-h", 0};
-int opt_types[] = {INTARG, BOOLARG, BOOLARG, BENCHMARK, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-c", "-rc", "-benchmark", "-h", "-i", 0};
+int opt_types[] = {INTARG, BOOLARG, BOOLARG, BENCHMARK, BOOLARG, INTARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -783,8 +781,10 @@ int main(int argc, char *argv[]) {
   int verify = 0;
   int rand_check = 0;
 
+  int iterations = 1;
+
   get_options(argc, argv, specifiers, opt_types, &n, &verify, &rand_check,
-              &benchmark, &help);
+              &benchmark, &help, &iterations);
 
   if (help)
     return usage();
@@ -817,14 +817,13 @@ int main(int argc, char *argv[]) {
   init_matrix(n, A, n);
   init_matrix(n, B, n);
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
+  for (int iter = 0; iter < iterations; iter++) {
+    timer_start();
+    strassen(n, A, n, B, n, C, n);
+    record_time(timer_stop_ms());
+  }
 
-  strassen(n, A, n, B, n, C, n);
-
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+  report_time();
 
   if (rand_check) {
     REAL *R, *V1, *V2;

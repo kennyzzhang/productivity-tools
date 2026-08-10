@@ -30,8 +30,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
-
+#include "timing.h"
 #include "getoptions.h"
 
 extern int errno;
@@ -43,9 +42,7 @@ extern int errno;
 /* Define ERROR_SUMMARY if you want to check your numerical results */
 #undef ERROR_SUMMARY
 
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
+
 
 #define f(x, y) (sin(x) * sin(y))
 #define randa(x, t) (0.0)
@@ -180,7 +177,7 @@ int divide(int lb, int ub, double **neww, double **old, int mode,
   }
 }
 
-int heat(void) {
+int heat(int iterations) {
 
 #ifdef ERROR_SUMMARY
   double tmp, **mat;
@@ -205,14 +202,18 @@ int heat(void) {
   /* Initialization */
   // l = divide(0, nx, new, old, INIT, 0);
 
-  /* Jacobi Iteration (divide x-dimension of 2D grid into stripes) */
+  for (int iter = 0; iter < iterations; iter++) {
+    l = divide(0, nx, neww, old, INIT, 0);
 
-  l = divide(0, nx, neww, old, INIT, 0);
-
-  for (int c = 1; c <= nt; c++) {
-    t = tu + c * dt;
-    l = divide(0, nx, neww, old, COMP, c);
+    timer_start();
+    for (int c = 1; c <= nt; c++) {
+      t = tu + c * dt;
+      l = divide(0, nx, neww, old, COMP, c);
+    }
+    record_time(timer_stop_ms());
   }
+
+  report_time();
 
 #ifdef ERROR_SUMMARY
   /* Error summary computation: Not parallelized! */
@@ -307,10 +308,10 @@ void read_heatparams(char *filefn) {
 
 const char *specifiers[] = {"-g",  "-nx",        "-ny", "-nt", "-xu",
                             "-xo", "-yu",        "-yo", "-tu", "-to",
-                            "-f",  "-benchmark", "-h",  0};
+                            "-f",  "-benchmark", "-h",  "-i", 0};
 int opt_types[] = {INTARG,    INTARG,    INTARG,    INTARG,    DOUBLEARG,
                    DOUBLEARG, DOUBLEARG, DOUBLEARG, DOUBLEARG, DOUBLEARG,
-                   STRINGARG, BENCHMARK, BOOLARG,   0};
+                   STRINGARG, BENCHMARK, BOOLARG,   INTARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -333,8 +334,10 @@ int main(int argc, char *argv[]) {
   // there is some benigh race in initalization code for the math functions.
   fprintf(stderr, "Testing exp: %f\n", randb(nx, nt));
 
+  int iterations = 1;
+
   get_options(argc, argv, specifiers, opt_types, &leafmaxcol, &nx, &ny, &nt,
-              &xu, &xo, &yu, &yo, &tu, &to, filename, &benchmark, &help);
+              &xu, &xo, &yu, &yo, &tu, &to, filename, &benchmark, &help, &iterations);
 
   if (help)
     return usage();
@@ -393,14 +396,7 @@ int main(int argc, char *argv[]) {
   dtdxsq = dt / (dx * dx);
   dtdysq = dt / (dy * dy);
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
-
-  int ret = heat();
-
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+  int ret = heat(iterations);
 
   fprintf(stderr, "\nCilk Example: heat\n");
   fprintf(stderr, "\n   dx = %f", dx);

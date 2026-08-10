@@ -49,7 +49,7 @@ set(all_variants
   cilkprace
 )
 
-set(all_needs_getoptions cholesky cilksort fft heat lu matmul nqueens rectmul rectmulred strassen)
+set(all_needs_getoptions cholesky cilksort fft fib fibred heat lu matmul nqueens qsort rectmul rectmulred strassen)
 set(all_needs_lm cholesky fft heat)
 set(all_has_cilk notool cilksan cilkpiston cilkprace)
 set(all_race_detectors cilksan cilkpiston cilkprace)
@@ -205,7 +205,7 @@ function(add_to_meta_targets target test variant)
       || true
     VERBATIM)
   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp
-    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp" || true
+    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} -i 5 &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp" || true
     DEPENDS ${target}
     DEPENDS ${target}.time.rename_to_tmp
     COMMENT "Timing ${target}"

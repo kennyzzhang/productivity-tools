@@ -23,11 +23,9 @@
 #include <cilk/cilk.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
-
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
+#include <stdlib.h>
+#include "timing.h"
+#include "getoptions.h"
 
 #ifdef SERIAL
 #include <cilk/cilk_stub.h>
@@ -56,21 +54,20 @@ int main(int argc, char *argv[]) {
 
   n = 36;
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: fib [<cilk options>] <n>\n");
-    fprintf(stderr, "Use default n = %d", n);
-  } else {
-    n = atoi(argv[1]);
-    fprintf(stderr, "Running %s with n = %d", argv[0], n);
+  const char *specifiers[] = {"-n", "-i", 0};
+  int opt_types[] = {INTARG, INTARG, 0};
+  int iterations = 1;
+
+  get_options(argc, argv, specifiers, opt_types, &n, &iterations);
+  fprintf(stderr, "Running %s with n = %d\n", argv[0], n);
+
+  for (int iter = 0; iter < iterations; iter++) {
+    timer_start();
+    result = fib(n);
+    record_time(timer_stop_ms());
   }
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
-  result = fib(n);
-
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+  report_time();
 
   fprintf(stderr, "Result: %d\n", result);
   return 0;

@@ -23,10 +23,9 @@
 #include <cilk/opadd_reducer>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
-
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
+#include "timing.h"
+extern "C" {
+#include "getoptions.h"
 }
 
 void fib(int n, cilk::opadd_reducer<int> &total) {
@@ -43,21 +42,25 @@ void fib(int n, cilk::opadd_reducer<int> &total) {
 
 int main(int argc, char *argv[]) {
 
-  if (argc != 2) {
-    fprintf(stderr, "Usage: fib <n>\n");
-    exit(1);
-  }
+  const char *specifiers[] = {"-n", "-i", 0};
+  int opt_types[] = {INTARG, INTARG, 0};
+  int iterations = 1;
+  int n = 36; // Default to match original fib
 
-  int n = atoi(argv[1]);
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
+  get_options(argc, argv, specifiers, opt_types, &n, &iterations);
 
   cilk::opadd_reducer<int> total = 0;
-  fib(n, total);
-  int result = total;
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+  int result;
+
+  for (int iter = 0; iter < iterations; iter++) {
+    total = 0; // Reset for each iteration
+    timer_start();
+    fib(n, total);
+    record_time(timer_stop_ms());
+  }
+
+  result = total;
+  report_time();
 
   fprintf(stderr, "Result: %d\n", result);
   return 0;

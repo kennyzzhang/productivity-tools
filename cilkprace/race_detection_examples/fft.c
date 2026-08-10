@@ -28,11 +28,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
-
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
+#include "timing.h"
 
 #include "getoptions.h"
 
@@ -3252,23 +3248,24 @@ void test_correctness(void) {
   return;
 }
 
-void test_speed(long size) {
+void test_speed(long size, int iterations) {
 
   COMPLEX *in = (COMPLEX *)malloc(size * sizeof(COMPLEX));
   COMPLEX *out = (COMPLEX *)malloc(size * sizeof(COMPLEX));
 
-  /* generate random input */
-  for (int i = 0; i < size; ++i) {
-    c_re(in[i]) = 1.0;
-    c_im(in[i]) = 1.0;
+  for (int iter = 0; iter < iterations; iter++) {
+    /* generate random input */
+    for (int i = 0; i < size; ++i) {
+      c_re(in[i]) = 1.0;
+      c_im(in[i]) = 1.0;
+    }
+
+    timer_start();
+    cilk_fft(size, in, out);
+    record_time(timer_stop_ms());
   }
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
-  cilk_fft(size, in, out);
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+  report_time();
 
   fprintf(stderr, "\ncilk example: fft\n");
   fprintf(stderr, "options:  number of elements   n = %ld\n\n", size);
@@ -3292,8 +3289,8 @@ int usage(void) {
   return 1;
 }
 
-const char *specifiers[] = {"-n", "-c", "-benchmark", "-h", 0};
-int opt_types[] = {LONGARG, BOOLARG, BENCHMARK, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-c", "-benchmark", "-h", "-i", 0};
+int opt_types[] = {LONGARG, BOOLARG, BENCHMARK, BOOLARG, INTARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -3306,8 +3303,10 @@ int main(int argc, char *argv[]) {
 
   fprintf(stderr, "Testing cos: %f\n", cos(2.35));
 
+  int iterations = 1;
+
   get_options(argc, argv, specifiers, opt_types, &size, &correctness,
-              &benchmark, &help);
+              &benchmark, &help, &iterations);
 
   if (help)
     return usage();
@@ -3331,7 +3330,7 @@ int main(int argc, char *argv[]) {
   if (correctness)
     test_correctness();
   else {
-    test_speed(size);
+    test_speed(size, iterations);
   }
 
   return 0;

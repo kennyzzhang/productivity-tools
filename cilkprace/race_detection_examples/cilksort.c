@@ -60,15 +60,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
+#include "timing.h"
 
 #ifdef SERIAL
 #include <cilk/cilk_stub.h>
 #endif
 
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
 
 #ifndef RAND_MAX
 #define RAND_MAX 32767
@@ -451,8 +448,8 @@ int usage(void) {
   return -1;
 }
 
-const char *specifiers[] = {"-n", "-c", "-benchmark", "-h", 0};
-int opt_types[] = {LONGARG, BOOLARG, BENCHMARK, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-c", "-benchmark", "-h", "-i", 0};
+int opt_types[] = {LONGARG, BOOLARG, BENCHMARK, BOOLARG, INTARG, 0};
 
 int main(int argc, char **argv) {
 
@@ -465,8 +462,10 @@ int main(int argc, char **argv) {
   check = 0;
   size = 10000000;
 
+  int iterations = 1;
+
   get_options(argc, argv, specifiers, opt_types, &size, &check, &benchmark,
-              &help);
+              &help, &iterations);
 
   if (help)
     return usage();
@@ -487,14 +486,15 @@ int main(int argc, char **argv) {
   array = (ELM *)malloc(size * sizeof(ELM));
   tmp = (ELM *)malloc(size * sizeof(ELM));
 
-  fill_array(array, size);
+  for (int iter = 0; iter < iterations; iter++) {
+    fill_array(array, size);
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
-  cilksort(array, tmp, size);
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+    timer_start();
+    cilksort(array, tmp, size);
+    record_time(timer_stop_ms());
+  }
+
+  report_time();
 
   if (check) {
     printf("Now check result ... \n");

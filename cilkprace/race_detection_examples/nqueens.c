@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
+#include "getoptions.h"
+#include "timing.h"
 
 #include <cilk/cilk.h>
 
@@ -10,9 +11,6 @@
 #include <cilk/cilk_stub.h>
 #endif
 
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
 
 /*
  * nqueen  4 = 2
@@ -90,25 +88,24 @@ int main(int argc, char *argv[]) {
 
   int n = 12;
 
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s [<cilk-options>] <n>\n", argv[0]);
-    fprintf(stderr, "Use default board size, n = 13.\n");
+  const char *specifiers[] = {"-n", "-i", 0};
+  int opt_types[] = {INTARG, INTARG, 0};
+  int iterations = 1;
 
-  } else {
-    n = atoi(argv[1]);
-    fprintf(stderr, "Running %s with n = %d.\n", argv[0], n);
-  }
+  get_options(argc, argv, specifiers, opt_types, &n, &iterations);
+
+  fprintf(stderr, "Running %s with n = %d.\n", argv[0], n);
 
   char *a = (char *)alloca(n * sizeof(char));
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
+  int res = 0;
+  for (int iter = 0; iter < iterations; iter++) {
+    timer_start();
+    res = nqueens(n, 0, a);
+    record_time(timer_stop_ms());
+  }
 
-  int res = nqueens(n, 0, a);
-
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+  report_time();
 
   if (res == 0) {
     fprintf(stderr, "No solution found.\n");

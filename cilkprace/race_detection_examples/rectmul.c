@@ -30,15 +30,13 @@
 #include <cilk/cilk.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
+#include "timing.h"
 
 #ifdef SERIAL
 #include <cilk/cilk_stub.h>
 #endif
 
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
+
 
 #define BLOCK_EDGE 16
 #define BLOCK_SIZE (BLOCK_EDGE * BLOCK_EDGE)
@@ -407,26 +405,25 @@ static long long multiply_matrix(block *A, long oa, block *B, long ob, long x,
   return flops;
 }
 
-int run(long x, long y, long z, int check) {
+int run(long x, long y, long z, int check, int iterations) {
 
   block *A = (block *)malloc(x * y * sizeof(block));
   block *B = (block *)malloc(y * z * sizeof(block));
   block *R = (block *)malloc(x * z * sizeof(block));
 
-  cilk_scope {
-    cilk_spawn init_matrix(A, x, y, y, 1.0);
-    cilk_spawn init_matrix(B, y, z, z, 1.0);
-    init_matrix(R, x, z, z, 0.0);
+  for (int iter = 0; iter < iterations; iter++) {
+    cilk_scope {
+      cilk_spawn init_matrix(A, x, y, y, 1.0);
+      cilk_spawn init_matrix(B, y, z, z, 1.0);
+      init_matrix(R, x, z, z, 0.0);
+    }
+
+    timer_start();
+    long long flops = multiply_matrix(A, y, B, z, x, y, z, R, z, 0);
+    record_time(timer_stop_ms());
   }
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
-
-  long long flops = multiply_matrix(A, y, B, z, x, y, z, R, z, 0);
-
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+  report_time();
 
   if (check) {
     printf("Now check result ... \n");
@@ -467,8 +464,8 @@ int usage(void) {
   return 1;
 }
 
-const char *specifiers[] = {"-x", "-y", "-z", "-c", "-benchmark", "-h", 0};
-int opt_types[] = {INTARG, INTARG, INTARG, BOOLARG, BENCHMARK, BOOLARG, 0};
+const char *specifiers[] = {"-x", "-y", "-z", "-c", "-benchmark", "-h", "-i", 0};
+int opt_types[] = {INTARG, INTARG, INTARG, BOOLARG, BENCHMARK, BOOLARG, INTARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -480,8 +477,10 @@ int main(int argc, char *argv[]) {
   int z = 1024;
   int check = 0;
 
+  int iterations = 1;
+
   get_options(argc, argv, specifiers, opt_types, &x, &y, &z, &check, &benchmark,
-              &help);
+              &help, &iterations);
 
   if (help)
     return usage();
@@ -517,7 +516,7 @@ int main(int argc, char *argv[]) {
   if (z < 1)
     z = 1;
 
-  t = run(x, y, z, check);
+  t = run(x, y, z, check, iterations);
 
   return t;
 }

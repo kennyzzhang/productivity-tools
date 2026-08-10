@@ -20,18 +20,15 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
 \****************************************************************************/
-#include "getoptions.h"
 #include <assert.h>
 #include <cilk/cilk.h>
 #include <math.h>
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
-
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
+#include <string.h>
+#include "timing.h"
+#include "getoptions.h"
 
 #ifdef SERIAL
 #include <cilk/cilk_stub.h>
@@ -435,8 +432,8 @@ int invalid_input(int n) {
  * main
  */
 
-const char *specifiers[] = {"-n", "-o", "-c", "-benchmark", "-h", 0};
-int opt_types[] = {INTARG, BOOLARG, BOOLARG, BENCHMARK, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-o", "-c", "-benchmark", "-h", "-i", 0};
+int opt_types[] = {INTARG, BOOLARG, BOOLARG, BENCHMARK, BOOLARG, INTARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -446,9 +443,11 @@ int main(int argc, char *argv[]) {
   int print = 0;
   int test = 0;
 
+  int iterations = 1;
+
   /* Parse arguments. */
   get_options(argc, argv, specifiers, opt_types, &n, &print, &test, &benchmark,
-              &help);
+              &help, &iterations);
 
   if (help)
     return usage();
@@ -491,13 +490,15 @@ int main(int argc, char *argv[]) {
   }
   memcpy((void *)Msave, (void *)M, n * n * sizeof(double));
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
-  lu(M, nBlocks);
+  for (int iter = 0; iter < iterations; iter++) {
+    memcpy((void *)M, (void *)Msave, n * n * sizeof(double));
 
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+    timer_start();
+    lu(M, nBlocks);
+    record_time(timer_stop_ms());
+  }
+
+  report_time();
 
   /* Test result. */
   if (print)

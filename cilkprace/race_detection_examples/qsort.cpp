@@ -31,7 +31,10 @@
 #include <iterator>
 #include <functional>
 #include <random>
-#include <sys/time.h>
+#include "timing.h"
+extern "C" {
+#include "getoptions.h"
+}
 
 #ifdef SERIAL
 #include <cilk/cilk_stub.h>
@@ -58,9 +61,7 @@ void sample_qsort(int * begin, int * end) {
   }
 }
 
-unsigned long long todval (struct timeval *tp) {
-    return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
+
 
 // A simple test harness 
 int qmain(int n) {
@@ -76,12 +77,9 @@ int qmain(int n) {
   std::cerr << "Sorting " << n << " integers" << std::endl;
 
 
-  struct timeval t1, t2;
-  gettimeofday(&t1,0);
-sample_qsort(a, a + n);
-    gettimeofday(&t2,0);
-    unsigned long long runtime_ms = (todval(&t2)-todval(&t1))/1000;
-    std::cout << runtime_ms/1000.0 << "\n";
+  timer_start();
+  sample_qsort(a, a + n);
+  record_time(timer_stop_ms());
 
   // Confirm that a is sorted and that each element contains the index.
   for (int i = 0; i < n - 1; ++i) {
@@ -102,16 +100,25 @@ sample_qsort(a, a + n);
 int main(int argc, char* argv[]) {
 
   int n = 10 * 1000 * 1000;
-  if (argc > 1) {
-    n = std::atoi(argv[1]);
-    if (n <= 0) {
-      std::cerr << "Invalid argument" << std::endl;
-      std::cerr << "Usage: qsort N" << std::endl;
-      std::cerr << "       N = number of elements to sort" << std::endl;
-      return 1;
-    }
-  }
-  int ret = qmain(n);
+  const char *specifiers[] = {"-n", "-i", 0};
+  int opt_types[] = {INTARG, INTARG, 0};
+  int iterations = 1;
 
+  get_options(argc, argv, specifiers, opt_types, &n, &iterations);
+
+  if (n <= 0) {
+    std::cerr << "Invalid argument" << std::endl;
+    std::cerr << "Usage: qsort N" << std::endl;
+    std::cerr << "       N = number of elements to sort" << std::endl;
+    return 1;
+  }
+
+  int ret = 0;
+  for (int iter = 0; iter < iterations; iter++) {
+    ret = qmain(n);
+    if (ret != 0) break;
+  }
+
+  report_time();
   return ret;
 }

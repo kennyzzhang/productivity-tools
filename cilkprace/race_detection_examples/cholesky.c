@@ -38,9 +38,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 
 #include "getoptions.h"
+#include "timing.h"
 
 #if HAVE_MALLOC_H
 #include <malloc.h>
@@ -53,10 +53,6 @@
 #ifndef RAND_MAX
 #define RAND_MAX 32767
 #endif
-
-unsigned long long todval(struct timeval *tp) {
-  return tp->tv_sec * 1000 * 1000 + tp->tv_usec;
-}
 
 unsigned long rand_nxt = 0;
 
@@ -752,8 +748,8 @@ int usage(void) {
   return 1;
 }
 
-const char *specifiers[] = {"-n", "-z", "-c", "-f", "-benchmark", "-h", 0};
-int opt_types[] = {INTARG, INTARG, BOOLARG, STRINGARG, BENCHMARK, BOOLARG, 0};
+const char *specifiers[] = {"-n", "-z", "-c", "-f", "-benchmark", "-h", "-i", 0};
+int opt_types[] = {INTARG, INTARG, BOOLARG, STRINGARG, BENCHMARK, BOOLARG, INTARG, 0};
 
 int main(int argc, char *argv[]) {
 
@@ -772,8 +768,10 @@ int main(int argc, char *argv[]) {
   size = 1000;
   nonzeros = 10000;
 
+  int iterations = 1;
+
   get_options(argc, argv, specifiers, opt_types, &size, &nonzeros, &check,
-              filename, &benchmark, &help);
+              filename, &benchmark, &help, &iterations);
 
   if (help)
     return usage();
@@ -885,19 +883,22 @@ int main(int argc, char *argv[]) {
     A = set_matrix(depth, A, i, i, 1.0);
   }
 
-  R = copy_matrix(depth, A);
-
   input_blocks = num_blocks(depth, R);
   input_nonzeros = num_nonzeros(depth, R);
 
-  struct timeval t1, t2;
-  gettimeofday(&t1, 0);
+  for (int iter = 0; iter < iterations; iter++) {
+    R = copy_matrix(depth, A);
 
-  R = cholesky(depth, R);
+    timer_start();
+    R = cholesky(depth, R);
+    record_time(timer_stop_ms());
 
-  gettimeofday(&t2, 0);
-  unsigned long long runtime_ms = (todval(&t2) - todval(&t1)) / 1000;
-  printf("%f\n", runtime_ms / 1000.0);
+    if (iter < iterations - 1) {
+      free_matrix(depth, R);
+    }
+  }
+
+  report_time();
 
   output_blocks = num_blocks(depth, R);
   output_nonzeros = num_nonzeros(depth, R);
