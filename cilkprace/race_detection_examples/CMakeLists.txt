@@ -205,7 +205,7 @@ function(add_to_meta_targets target test variant)
       || true
     VERBATIM)
   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp
-    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp"
+    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp" || true
     DEPENDS ${target}
     DEPENDS ${target}.time.rename_to_tmp
     COMMENT "Timing ${target}"

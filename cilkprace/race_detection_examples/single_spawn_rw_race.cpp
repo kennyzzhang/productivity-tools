@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <cilk/cilk.h>
+#include <unistd.h>
 
-void f(int* x, int v){
+__attribute__((noinline)) void f(int* x, int v){
   *x = v;
+  usleep(100);
 }
 
 int main() {

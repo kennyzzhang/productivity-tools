@@ -156,7 +156,7 @@ public:
     outs_red << "HAS INIT" << std::endl;
 #endif
     shadow_mem = mmap(nullptr, vmem_shadow_size, PROT_READ | PROT_WRITE,
-                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (shadow_mem == (void *)-1) {
       perror("SHADOW MEM");
       _exit(1);
