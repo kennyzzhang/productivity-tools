@@ -261,7 +261,7 @@ function(add_extra_target_commit extra_test extra_variant extra_commit)
     ExternalProject_Add(
       ${extra_commit_name}
       PREFIX runtimes/${extra_commit_name}
-      GIT_REPOSITORY git@github.com:kennyzzhang/productivity-tools.git
+      GIT_REPOSITORY https://github.com/kennyzzhang/productivity-tools.git
       GIT_TAG ${extra_commit}
       CMAKE_ARGS
         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -276,11 +276,19 @@ function(add_extra_target_commit extra_test extra_variant extra_commit)
     )
   endif()
 
+  if(APPLE)
+    set(RUNTIME_LIBDIR "darwin")
+    set(RUNTIME_LIB_SUFFIX "_osx.a")
+  else()
+    set(RUNTIME_LIBDIR "${ARCH}")
+    set(RUNTIME_LIB_SUFFIX ".a")
+  endif()
+
   add_executable(${extra_target_commit})
   add_dependencies(${extra_target_commit} ${extra_commit_name})
   target_link_libraries(${extra_target_commit}
     ${extra_target}.if
-    ${CMAKE_CURRENT_BINARY_DIR}/runtimes/${extra_commit_name}/src/${extra_commit_name}-build/lib/${ARCH}/libclang_rt.${extra_variant}.a
+    ${CMAKE_CURRENT_BINARY_DIR}/runtimes/${extra_commit_name}/src/${extra_commit_name}-build/lib/${RUNTIME_LIBDIR}/libclang_rt.${extra_variant}${RUNTIME_LIB_SUFFIX}
     stdc++
   )
   add_to_meta_targets(${extra_target_commit} ${extra_test} ${extra_variant})
