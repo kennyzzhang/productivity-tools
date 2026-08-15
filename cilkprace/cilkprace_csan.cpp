@@ -222,7 +222,7 @@ void __csan_after_alloca(const csi_id_t alloca_id, const void *addr,
       << ", addr=" << addr << ", nb=" << num_bytes << ", static="
       << prop.is_static << ")" << std::endl;
 #endif
-  tool->register_alloca(addr, num_bytes);
+  tool->register_alloca((uintptr_t) addr, num_bytes);
 }
 
 CILKSAN_API
@@ -249,7 +249,7 @@ void __csan_after_allocfn(const csi_id_t allocfn_id, const void *addr,
       << alignment << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty
       << ")" << std::endl;
 #endif
-  tool->register_allocfn(addr, size * num);
+  tool->register_allocfn((uintptr_t) addr, size * num);
 }
 
 CILKSAN_API
@@ -261,7 +261,7 @@ void __csan_alloc_strdup(const csi_id_t allocfn_id, const csi_id_t func_id,
            << ", fid=" << func_id << ", res=" << (void *)result << ")"
            << std::endl;
 #endif
-  tool->register_alloc_strdup(result, str);
+  tool->register_alloc_strdup((uintptr_t) result, str);
 }
 
 CILKSAN_API
@@ -272,7 +272,7 @@ void __csan_before_free(const csi_id_t free_id, const void *ptr,
       << "[W" << worker_number() << "] before_free(fid=" << free_id
       << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
-  tool->register_free(ptr);
+  tool->register_free((uintptr_t) ptr);
 }
 
 CILKSAN_API

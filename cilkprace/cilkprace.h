@@ -11,9 +11,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <ostream>
-#include <sys/mman.h>
 #include <unistd.h>
 #include <dlfcn.h>
+
+#include <shadowmem_reservevm.h>
+#include <shadowmem_pagetable.h>
 
 #include "outs_red.h"
 #include "stack.h"
@@ -105,67 +107,15 @@ __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
 }
 
 class CilkpraceImpl_t {
-  static constexpr size_t vmem_bytes = 0x00007fffffffffff;
-  static constexpr size_t overhead_per_byte = sizeof(shadow_label);
-  static constexpr size_t vmem_shadow_granularity = 4;
-  static constexpr size_t bytes_per_entry =
-      overhead_per_byte + vmem_shadow_granularity;
-  static constexpr size_t vmem_user_addressable_bytes =
-      vmem_bytes / bytes_per_entry * vmem_shadow_granularity;
-  static constexpr size_t vmem_shadow_size =
-      vmem_bytes - vmem_user_addressable_bytes;
-
-  void *shadow_mem;
+  shadowmem_reservevm<shadow_label, 4> shadow_mem;
+//  shadowmem_pagetable<shadow_label, 12, 12, 12, 12> shadow_mem;
   bool ignore_stdlib_races;
-
-  shadow_label *addr_to_shadow(void *addr) {
-#ifdef TRACE_CALLS
-    outs_red << "addr_to_shadow(" << std::hex << addr << ")" << std::endl;
-#endif
-    assert((size_t)addr < vmem_bytes && "VMEM BYTES ASSUMPTION VIOLATION");
-
-    // TODO: Bounds chekcing?
-    //  We have to be piecewise. But, we can imagine memory above us as glued on
-    //  where we are. That is, project the addresses above our shadow memory as
-    //  if they were just above the lower addresses
-    addr = (addr < shadow_mem)
-               ? addr
-               : (void *)((uint8_t *)addr - (uint8_t *)shadow_mem);
-
-#ifdef TRACE_CALLS
-    outs_red << "addr = " << std::hex << addr << std::endl;
-#endif
-
-    // Now we have to re-scale our address onto our shadow mapping.
-    // Fortunately, since each byte indexes into the array, we can just...
-    // index.
-    shadow_label *shadow_addr =
-        &((shadow_label *)shadow_mem)[(size_t)addr / vmem_shadow_granularity];
-
-    if ((uint8_t *)shadow_addr < (uint8_t *)shadow_mem ||
-        (uint8_t *)shadow_addr >= (uint8_t *)shadow_mem + vmem_shadow_size) {
-      return nullptr;
-    }
-
-    return shadow_addr;
-  }
 
 public:
   CilkpraceImpl_t() {
 #ifdef TRACE_CALLS
     outs_red << "HAS INIT" << std::endl;
 #endif
-    shadow_mem = mmap(nullptr, vmem_shadow_size, PROT_READ | PROT_WRITE,
-                      MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (shadow_mem == (void *)-1) {
-      perror("SHADOW MEM");
-      _exit(1);
-    }
-    // outs_red << "SHADOW MEM: " << shadow_mem << std::endl;
-    outs_red << "Want mem size: " << vmem_shadow_size << " = 2^"
-             << log2(vmem_shadow_size) << std::endl;
-    // outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
-
     const char *env_val = getenv("CILKPRACE_IGNORE_STDLIB_RACES");
     if (env_val && strcmp(env_val, "0") == 0) {
       ignore_stdlib_races = false;
@@ -183,7 +133,7 @@ public:
 
   ~CilkpraceImpl_t() {}
 
-  bool is_benign_stdlib_race(uint64_t race_addr) {
+  bool is_benign_stdlib_race(uintptr_t race_addr) {
     if (!ignore_stdlib_races) return false;
     Dl_info info;
     if (dladdr((void*)race_addr, &info) && info.dli_sname) {
@@ -195,109 +145,75 @@ public:
     return false;
   }
 
-  void register_write(uint64_t addr, size_t num_bytes,
+  void register_write(uintptr_t beg, size_t num_bytes,
                       const source_loc_t *store) {
-    bool has_race = false;
-    shadow_label *labels = addr_to_shadow((void *)addr);
-    if (!labels)
-      return; // TODO: Complain louder
-    size_t num_granules =
-        (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
-    // Clamp to not walk past end of shadow memory
-    for (size_t i = 0; i < num_granules; i++) {
-      bool race = labels[i].does_write_race(__cilkrts_get_os_label().label);
-      if (race) {
-        if (is_benign_stdlib_race(addr + i * vmem_shadow_granularity))
-          continue;
+    const auto cur_lab = __cilkrts_get_os_label().label;
+    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
+      if (lab.does_write_race(cur_lab) && !is_benign_stdlib_race(addr)) {
         outs_red
-            << "WRITE RACE ON BYTE " << std::hex
-            << (void *)((uint8_t *)addr + i * vmem_shadow_granularity)
-            << std::dec << "(+" << vmem_shadow_granularity << ") BY "
-            << std::dec << __cilkrts_get_os_label().label << " WITH "
-            << labels[i]
-            << std::endl; // << (void*)((uint8_t*) addr + i *
-                          // vmem_shadow_granularity) << std::dec << "(+" <<
-                          // vmem_shadow_granularity << ")" << std::endl;
-        has_race = true;
+            << "WRITE RACE ON BYTE " << std::hex << addr
+            << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
+            << std::dec << cur_lab << " WITH "
+            << lab
+            << std::endl;
+        outs_red << "BY " << std::dec << cur_lab
+             << std::endl;
+        if (store)
+          outs_red << "@ " << store->filename << " Ln " << std::dec
+                   << store->line_number << " Col " << std::dec
+                   << store->column_number << std::endl;
+        outs_red << "======================" << std::endl;
+        _exit(EXIT_FAILURE);
       }
-    }
-    if (has_race) {
-      outs_red << "BY " << std::dec << __cilkrts_get_os_label().label
-               << std::endl;
-      if (store)
-        outs_red << "@ " << store->filename << " Ln " << std::dec
-                 << store->line_number << " Col " << std::dec
-                 << store->column_number << std::endl;
-      outs_red << "======================" << std::endl;
-      _exit(EXIT_FAILURE);
-    }
+    });
   }
 
-  void register_read(uint64_t addr, size_t num_bytes,
+  void register_read(uintptr_t beg, size_t num_bytes,
                      const source_loc_t *store) {
-    bool has_race = false;
-    shadow_label *labels = addr_to_shadow((void *)addr);
-    if (!labels)
-      return; // TODO: Complain louder
-
-    size_t num_granules =
-        (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
-    for (size_t i = 0; i < num_granules; i++) {
-      bool race = labels[i].does_read_race(__cilkrts_get_os_label().label);
-      if (race) {
-        if (is_benign_stdlib_race(addr + i * vmem_shadow_granularity))
-          continue;
+    const auto cur_lab = __cilkrts_get_os_label().label;
+    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
+      if (lab.does_read_race(cur_lab) && !is_benign_stdlib_race(addr)) {
         outs_red
-            << "READ RACE ON BYTE " << std::hex
-            << (void *)((uint8_t *)addr + i * vmem_shadow_granularity)
-            << std::dec << "(+" << vmem_shadow_granularity << ") BY "
-            << std::dec << __cilkrts_get_os_label().label << " WITH "
-            << labels[i]
-            << std::endl; // << (void*)((uint8_t*) addr + i *
-                          // vmem_shadow_granularity) << std::dec << "(+" <<
-                          // vmem_shadow_granularity << ")" << std::endl;
-        has_race = true;
+            << "READ RACE ON BYTE " << std::hex << addr
+            << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
+            << std::dec << cur_lab << " WITH "
+            << lab
+            << std::endl;
+        outs_red << "BY " << std::dec << cur_lab
+                 << std::endl;
+        if (store)
+          outs_red << "@ " << store->filename << " Ln " << std::dec
+                   << store->line_number << " Col " << std::dec
+                   << store->column_number << std::endl;
+        outs_red << "======================" << std::endl;
+        _exit(EXIT_FAILURE);
       }
-    }
-    if (has_race) {
-      outs_red << "BY " << std::dec << __cilkrts_get_os_label().label
-               << std::endl;
-      if (store)
-        outs_red << "@ " << store->filename << " Ln " << std::dec
-                 << store->line_number << " Col " << std::dec
-                 << store->column_number << std::endl;
-      outs_red << "======================" << std::endl;
-      _exit(EXIT_FAILURE);
-    }
+    });
   }
 
-  void register_alloca(const void *addr, size_t nb) {
-    shadow_label *labels = addr_to_shadow((void *)addr);
-    if (!labels)
-      return;
-    size_t num_granules =
-        (nb + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
-    size_t shadow_bytes = num_granules * sizeof(shadow_label);
-    memset(labels, 0, shadow_bytes);
+  void register_alloca(uintptr_t beg, size_t num_bytes) {
+    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
+      memset(&lab, 0, sizeof(shadow_label));
+    });
   }
 
-  void register_allocfn(const void *addr, size_t nb) {
+  void register_allocfn(uintptr_t addr, size_t nb) {
     register_alloca(addr, nb);
   }
 
-  void register_alloc_strdup(const void *addr, const char *str) {
+  void register_alloc_strdup(uintptr_t addr, const char *str) {
     if (addr && str)
       register_alloca(addr, strlen(str) + 1);
   }
 
-  void register_free(const void *addr) {
+  void register_free(uintptr_t addr) {
     outs_red << "UNHANDLED FREE" << std::endl;
   }
 
-  void advance_stack_frame(uint64_t addr) {
+  void advance_stack_frame(uintptr_t addr) {
     outs_red << "UNHANDLED STACK ADVANCE" << std::endl;
   }
-  void restore_stack(const csi_id_t call_id, uint64_t addr) {
+  void restore_stack(const csi_id_t call_id, uintptr_t addr) {
     outs_red << "UNHANDLED STACK RESTORE" << std::endl;
   }
 };

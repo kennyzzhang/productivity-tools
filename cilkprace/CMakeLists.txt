@@ -8,6 +8,7 @@ set(CILKPRACE_SOURCES
   csanrt.cpp
   libhooks.cpp
   debug_util.cpp
+  ${CILKTOOLS_SOURCE_DIR}/common-internal/outs_red.cpp
   )
 
 set(CILKPRACE_BITCODE_SOURCE
@@ -16,8 +17,10 @@ set(CILKPRACE_BITCODE_SOURCE
   cilkprace_csan.cpp
   libhooks.cpp
   debug_util.cpp
+  ${CILKTOOLS_SOURCE_DIR}/common-internal/outs_red.cpp
   )
 
+include_directories(${CILKTOOLS_SOURCE_DIR}/common-internal/include)
 include_directories(${CILKTOOLS_SOURCE_DIR}/include)
 
 set(CILKPRACE_CFLAGS ${SANITIZER_COMMON_CFLAGS})
