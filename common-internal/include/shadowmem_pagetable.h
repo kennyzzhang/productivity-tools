@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -9,15 +10,25 @@ using size_t = std::size_t;
 
 template<typename Value>
 class lazy_alloc_ptr {
-  Value* ptr = nullptr;
+  std::atomic<Value*> ptr{nullptr};
 
 public:
   ~lazy_alloc_ptr() {
-    if (ptr != nullptr) delete ptr;
+    Value* p = ptr.load(std::memory_order_relaxed);
+    if (p != nullptr) delete p;
   }
 
   Value& get() {
-    return *(ptr != nullptr ? ptr : ptr = new Value);
+    Value* p = ptr.load(std::memory_order_acquire);
+    if (p != nullptr) return *p;
+
+    Value* new_val = new Value;
+    if (ptr.compare_exchange_strong(p, new_val, std::memory_order_release, std::memory_order_acquire)) {
+      return *new_val;
+    } else {
+      delete new_val;
+      return *p;
+    }
   }
 };
 

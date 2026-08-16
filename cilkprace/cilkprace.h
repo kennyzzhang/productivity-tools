@@ -107,7 +107,7 @@ __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
 }
 
 class CilkpraceImpl_t {
-  shadowmem_reservevm<shadow_label, 4> shadow_mem;
+  shadowmem_reservevm<shadow_label, 1> shadow_mem;
 //  shadowmem_pagetable<shadow_label, 12, 12, 12, 12> shadow_mem;
   bool ignore_stdlib_races;
 
