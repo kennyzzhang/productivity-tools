@@ -49,25 +49,29 @@ public:
   }
 };
 
-template<typename Value, int... Widths>
-class shadowmem_pagetable : shadowmem<shadowmem_pagetable<Value, Widths...>> {
+template<typename Value, size_t Granularity, int... Widths>
+class shadowmem_pagetable : shadowmem<shadowmem_pagetable<Value, Granularity, Widths...>> {
+  using base = shadowmem<shadowmem_pagetable<Value, Granularity, Widths...>>;
   page_table<Value, Widths...> pt;
 
 public:
-  static constexpr size_t vmem_shadow_granularity = 1;
+  static constexpr uintptr_t vmem_shadow_granularity = Granularity;
 
   shadowmem_pagetable() {
     int total_width = (Widths + ...);
-    if (total_width < 48) {
+    if (vmem_shadow_granularity << total_width < (uintptr_t)1 << 48) {
       std::clog << "Warning: total page table width (0";
       ((std::clog << " + " << Widths) , ...);
       std::clog << " = " << total_width
-        << ") is less than assumed 48-bit pointer width." << std::endl;
+        << ") with granularity " << vmem_shadow_granularity
+        << "is less than assumed 48-bit pointer width." << std::endl;
     }
   }
 
   template<typename Fn>
   void for_each(uintptr_t beg, uintptr_t end, Fn fn) {
+    beg = base::floordivgrain(beg);
+    end = base::ceildivgrain(end);
     for (uintptr_t i = beg; i != end; i++) {
       // TODO: smarter walking of page table
       fn(i, pt[i]);

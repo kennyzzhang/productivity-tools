@@ -107,8 +107,13 @@ __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
 }
 
 class CilkpraceImpl_t {
-  shadowmem_reservevm<shadow_label, 4> shadow_mem;
-//  shadowmem_pagetable<shadow_label, 12, 12, 12, 12> shadow_mem;
+//  shadowmem_reservevm<shadow_label, 4> shadow_mem;
+
+// Assuming shadow_label is 2^10 bytes, pointers are 2^3 bytes,
+// and virtual addresses are 48 bits.
+// Granularity 4 means 46 bits in page table.
+//  shadowmem_pagetable<shadow_label, 4, 27, 19> shadow_mem;
+  shadowmem_pagetable<shadow_label, 4, 18, 18, 10> shadow_mem;
   bool ignore_stdlib_races;
 
 public:
