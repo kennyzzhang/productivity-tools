@@ -187,33 +187,10 @@ foreach(variant IN LISTS variants)
 endforeach()
 
 function(add_to_meta_targets target test variant)
-  # Incredible jank to create a target for a custom command that has the same
-  # name as the output file.
-  #
-  # If you want target a to build file b, the following works:
-  # add_custom_command(OUTPUT b COMMAND ...)
-  # add_custom_target(a DEPENDS b)
-  #
-  # But add_custom_target(a DEPENDS a) makes a circular dependency,
-  # instead of specifying that target a depends on output file a.
-  #
-  # To avoid this shadowing, we rename the output file before running the
-  # custom command, and rename it back afterwards.
-  add_custom_target(${target}.time.rename_to_tmp
-    COMMAND [ -e ${CMAKE_CURRENT_BINARY_DIR}/${target}.time ]
-      && mv ${CMAKE_CURRENT_BINARY_DIR}/${target}.time ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp
-      || true
-    VERBATIM)
-  add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp
-    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} -i 5 &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp" || true
-    DEPENDS ${target}
-    DEPENDS ${target}.time.rename_to_tmp
-    COMMENT "Timing ${target}"
-    VERBATIM
-  )
   add_custom_target(${target}.time
-    COMMAND cmake -E rename ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp ${CMAKE_CURRENT_BINARY_DIR}/${target}.time
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${target}.time.tmp
+    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} -i 5 &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time" || true
+    DEPENDS ${target}
+    COMMENT "Timing ${target}"
     VERBATIM
   )
   set_target_properties(${target}.time
