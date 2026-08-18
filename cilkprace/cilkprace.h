@@ -152,7 +152,7 @@ public:
 
   void register_write(uintptr_t beg, size_t num_bytes,
                       const source_loc_t *store) {
-    const auto cur_lab = __cilkrts_get_os_label().label;
+    const auto& cur_lab = *__cilkrts_get_os_label().label;
     shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
       if (lab.does_write_race(cur_lab) && !is_benign_stdlib_race(addr)) {
         outs_red
@@ -175,7 +175,7 @@ public:
 
   void register_read(uintptr_t beg, size_t num_bytes,
                      const source_loc_t *store) {
-    const auto cur_lab = __cilkrts_get_os_label().label;
+    const auto& cur_lab = *__cilkrts_get_os_label().label;
     shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
       if (lab.does_read_race(cur_lab) && !is_benign_stdlib_race(addr)) {
         outs_red

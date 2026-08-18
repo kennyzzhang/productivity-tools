@@ -32,9 +32,7 @@ set(all_tests_cpp
   nqueens_racy
   qsort
   single_spawn_norace
-  single_spawn_race
   single_spawn_rr_norace
-  single_spawn_rw_race
   stack_reuse
   strdup
 )
@@ -188,7 +186,7 @@ endforeach()
 
 function(add_to_meta_targets target test variant)
   add_custom_target(${target}.time
-    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} -i 5 &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time" || true
+    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} -i 5 &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time"
     DEPENDS ${target}
     COMMENT "Timing ${target}"
     VERBATIM

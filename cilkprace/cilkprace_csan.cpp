@@ -198,7 +198,7 @@ void __csan_before_sync(const csi_id_t sync_id, const unsigned sync_reg) {
   __cilkrts_os_label lbl = __cilkrts_get_os_label();
   outs_red
       << "[W" << worker_number() << "] before_sync(sid=" << sync_id << ", sr="
-      << sync_reg << ") label: " << lbl.label << std::endl;
+      << sync_reg << ") label: " << *lbl.label << std::endl;
 #endif
 }
 
@@ -208,7 +208,7 @@ void __csan_after_sync(const csi_id_t sync_id, const unsigned sync_reg) {
   __cilkrts_os_label lbl = __cilkrts_get_os_label();
   outs_red
       << "[W" << worker_number() << "] after_sync(sid=" << sync_id << ", sr="
-      << sync_reg << ") label: " << lbl.label << std::endl;
+      << sync_reg << ") label: " << *lbl.label << std::endl;
 #endif
   
 }
