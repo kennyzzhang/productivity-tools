@@ -57,7 +57,16 @@ static void reduce_MAAPstack(void *left_view, void *right_view) {
 #endif
   MAAPstack *left = static_cast<MAAPstack *>(left_view);
   MAAPstack *right = static_cast<MAAPstack *>(right_view);
-  assert(right->size() == 0 && "Expected empty MAAPstack!");
+  
+  int32_t net_change = static_cast<int32_t>(right->size()) - 1;
+  if (net_change < 0) {
+    for (int32_t i = 0; i < -net_change; ++i) left->pop();
+  } else if (net_change > 0) {
+    for (int32_t i = 0; i < net_change; ++i) {
+      left->push_back(right->from_back(net_change - 1 - i));
+    }
+  }
+  
   right->~MAAPstack();
 }
 
@@ -73,47 +82,39 @@ static void reduce_ustack(void *left_view, void *right_view) {
 #endif
   ustack *left = static_cast<ustack *>(left_view);
   ustack *right = static_cast<ustack *>(right_view);
-  assert(right->size() == 0 && "Expected empty ustack!");
+  
+  int32_t net_change = static_cast<int32_t>(right->size()) - 1;
+  if (net_change < 0) {
+    for (int32_t i = 0; i < -net_change; ++i) left->pop();
+  } else if (net_change > 0) {
+    for (int32_t i = 0; i < net_change; ++i) {
+      left->push_back(right->from_back(net_change - 1 - i));
+    }
+  }
+  
   right->~ustack();
-}
-static void init_pstack(void *view) {
-#if TRACE_CALLS
-  std::cerr << "init pstack" << std::endl;
-#endif
-  new (view) pstack();
-}
-static void reduce_pstack(void *left_view, void *right_view) {
-#if TRACE_CALLS
-  std::cerr << "reduce pstack" << std::endl;
-#endif
-  pstack *left = static_cast<pstack *>(left_view);
-  pstack *right = static_cast<pstack *>(right_view);
-  assert(right->size() == 0 && "Expected empty pstack!");
-  right->~pstack();
 }
 
 typedef MAAPstack cilk_reducer(init_MAAPstack,
                                reduce_MAAPstack) MAAPstack_reducer;
 typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
-typedef pstack cilk_reducer(init_pstack, reduce_pstack) pstack_reducer;
 
-extern pstack_reducer parallel_execution;
 extern MAAPstack_reducer MAAPs;
 extern ustack_reducer MAAP_counts;
 
 // FIXME
 __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
-  return true; // parallel_execution.back();
+  return !__cilkrts_get_os_label().label->is_serial();
 }
 
 class CilkpraceImpl_t {
-//  shadowmem_reservevm<shadow_label, 4> shadow_mem;
+  shadowmem_reservevm<shadow_label, 4> shadow_mem;
 
 // Assuming shadow_label is 2^10 bytes, pointers are 2^3 bytes,
 // and virtual addresses are 48 bits.
 // Granularity 4 means 46 bits in page table.
 //  shadowmem_pagetable<shadow_label, 4, 27, 19> shadow_mem;
-  shadowmem_pagetable<shadow_label, 4, 18, 18, 10> shadow_mem;
+//  shadowmem_pagetable<shadow_label, 4, 18, 18, 10> shadow_mem;
   bool ignore_stdlib_races;
 
 public:

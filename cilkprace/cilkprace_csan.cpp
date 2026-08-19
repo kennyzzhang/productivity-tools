@@ -32,6 +32,8 @@ void __csan_before_call(const csi_id_t call_id, const csi_id_t func_id, unsigned
       << "[W" << worker_number() << "] before_call(fid=" << func_id << ", nsr="
       << prop.num_sync_reg << ", " << prop.may_spawn << ")" << std::endl;
 #endif
+  if (!should_check()) return;
+  MAAP_counts.push_back(MAAP_count);
 }
 
 CILKSAN_API
@@ -41,6 +43,10 @@ void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id, unsigned 
       << "[W" << worker_number() << "] after_call(feid=" << func_id
       << ", fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
+  if (!should_check()) return;
+  for (unsigned i = 0; i < MAAP_count; ++i)
+    MAAPs.pop();
+  MAAP_counts.pop();
 }
 
  CILKSAN_API void __csan_func_entry(const csi_id_t func_id, __attribute__((noescape)) const void *bp, 
@@ -324,7 +330,6 @@ CILKSAN_API void __csan_get_MAAP(MAAP_t *ptr, csi_id_t id, unsigned idx) {
     // The stack doesn't have MAAPs for us, so assume the worst.
     *ptr = MAAP_t::ModRef;
   }
-  *ptr = MAAP_t::NoAccess;
 }
 
 // This is what libhooks translates things in to
