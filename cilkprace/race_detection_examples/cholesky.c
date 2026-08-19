@@ -753,7 +753,7 @@ int opt_types[] = {INTARG, INTARG, BOOLARG, STRINGARG, BENCHMARK, BOOLARG, INTAR
 
 int main(int argc, char *argv[]) {
 
-  Matrix R;
+  Matrix R = NULL;
   int size, depth, nonzeros, benchmark, help, check = 1;
   int input_nonzeros, input_blocks, output_nonzeros, output_blocks;
   Real error = 0.0;
