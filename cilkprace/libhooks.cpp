@@ -47,7 +47,7 @@ CILKSAN_API void __cilksan_record_alloc(const void *ptr, size_t num_bytes) {
     return;
   // Report an alloc as a write later.
   // FIXME: Should this be register allocfn?
-  tool->register_alloca(ptr, num_bytes);
+  tool->register_alloca((uintptr_t) ptr, num_bytes);
 };
 CILKSAN_API void __cilksan_record_free(const void *ptr) {
   outs_red << "UNHANDLED FREE" << std::endl;

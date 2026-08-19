@@ -31,7 +31,7 @@ static std::string vector_to_string(const std::vector<uint8_t> &vec) {
 // Verification utility
 int verify_label(std::vector<uint8_t> expected, const char *context) {
   __cilkrts_os_label os_l = __cilkrts_get_os_label();
-  std::vector<uint8_t> actual = os_l.label.to_vector();
+  std::vector<uint8_t> actual = os_l.label->to_vector();
 
   if (actual != expected) {
     std::lock_guard<std::mutex> lock(print_mutex);

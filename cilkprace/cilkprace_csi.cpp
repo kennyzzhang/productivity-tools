@@ -175,7 +175,7 @@ void __csi_after_alloca(const csi_id_t alloca_id, const void *addr,
            << ", addr=" << addr << ", nb=" << num_bytes
            << ", static=" << prop.is_static << ")" << std::endl;
 #endif
-  tool->register_alloca(addr, num_bytes);
+  tool->register_alloca((uintptr_t) addr, num_bytes);
 }
 
 CILKTOOL_API
@@ -201,7 +201,7 @@ void __csi_after_allocfn(const csi_id_t allocfn_id, const void *addr,
            << ", type=" << prop.allocfn_ty << ")" << std::endl;
 #endif
 
-  tool->register_allocfn(addr, size * num);
+  tool->register_allocfn((uintptr_t) addr, size * num);
 }
 
 CILKTOOL_API
@@ -212,7 +212,7 @@ void __csi_before_free(const csi_id_t free_id, const void *ptr,
            << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
 
-  tool->register_free(ptr);
+  tool->register_free((uintptr_t) ptr);
 }
 
 CILKTOOL_API
