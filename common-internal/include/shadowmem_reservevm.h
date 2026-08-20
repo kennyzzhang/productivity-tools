@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstdint>
 #include <sys/mman.h>
 
@@ -39,13 +40,12 @@ public:
 #endif
     assert((size_t)addr < vmem_bytes && "VMEM BYTES ASSUMPTION VIOLATION");
 
-    // TODO: Bounds chekcing?
-    //  We have to be piecewise. But, we can imagine memory above us as glued on
-    //  where we are. That is, project the addresses above our shadow memory as
-    //  if they were just above the lower addresses
-    addr = (addr < (uintptr_t)shadowmem)
-               ? addr
-               : addr - shadowmem;
+    // We have to be piecewise. Project the addresses above our shadow memory as
+    // if they were glued onto the lower addresses below our shadow memory.
+    assert(addr < shadowmem && addr >= shadowmem + vmem_shadow_size && "Addr already within vmem shadow?!?");
+    if (addr >= shadowmem + vmem_shadow_size) {
+      addr -= vmem_shadow_size;
+    }
 
 #ifdef TRACE_CALLS
     outs_red << "addr = " << std::hex << addr << std::endl;
@@ -57,8 +57,8 @@ public:
     Value *shadow_addr =
         &((Value *)shadowmem)[addr / vmem_shadow_granularity];
 
-    assert((uintptr_t *)shadow_addr >= shadowmem &&
-        (uintptr_t *)shadow_addr < shadowmem + vmem_shadow_size);
+    assert((uintptr_t)shadow_addr >= shadowmem &&
+           (uintptr_t)shadow_addr < shadowmem + vmem_shadow_size && "Shadow addr projected OOB!");
 
     return *shadow_addr;
   }
