@@ -56,12 +56,14 @@ cmake                                                                          \
   -DCMAKE_CXX_COMPILER="$OPENCILK/bin/clang++"                                 \
   -DLLVM_CMAKE_DIR="$OPENCILK"                                                 \
   -DCMAKE_BUILD_TYPE="RelWithDebInfo"                                          \
-  -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"                             \
-  -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g -DNDEBUG"                           \
+  -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g "    \
+  -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"   \
   -DCMAKE_EXPORT_COMPILE_COMMANDS="ON"                                         \
   -DDISABLED_TESTS="fibred;heat;fft"                                           \
   "$SOURCE_DIR"                                                                \
 ;
+
+# -DNDEBUG
 
 #  -DEXTRA_TARGET_COMMITS="$(printf "%s"                                        \
 #    "*.cilkpiston.cilkpiston-stubhooks-noinline;"                              \
