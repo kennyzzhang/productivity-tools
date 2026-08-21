@@ -57,6 +57,8 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
 #endif
   // Putting this guard here shouldn't affect correctness but might make us
   // faster As we filter out reads that are about to be writes anyway
+  if (prop.is_read_before_write_in_bb)
+    return;
   tool->register_read((uint64_t)addr, num_bytes, load_id);
 }
 

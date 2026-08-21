@@ -80,7 +80,15 @@ public:
   }
 
   template<typename Fn>
-  void for_each(uintptr_t beg, uintptr_t end, Fn fn) {
+  __attribute__((always_inline))
+  inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
+    // Single Granule fast-path :)
+    size_t num_bytes = end - beg;
+    if (__builtin_expect(num_bytes <= Granularity, 1)) {
+      uintptr_t idx = beg / Granularity;
+      fn(idx, pt[idx]);
+      return;
+    }
     beg = base::floordivgrain(beg);
     end = base::ceildivgrain(end);
     for (uintptr_t i = beg; i != end; i++) {

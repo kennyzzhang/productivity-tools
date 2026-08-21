@@ -24,6 +24,9 @@ public:
 
 
   template<typename Fn>
-  void for_each(coerce_ptr beg, coerce_ptr end, Fn fn) { static_cast<Impl*>(this)->for_each(beg, end, fn); }
+  __attribute__((always_inline))
+  inline void for_each(coerce_ptr beg, coerce_ptr end, Fn&& fn) {
+    static_cast<Impl*>(this)->for_each(beg, end, std::forward<Fn>(fn));
+  }
 };
 

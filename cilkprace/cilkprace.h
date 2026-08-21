@@ -151,50 +151,68 @@ public:
     return false;
   }
 
-  void register_write(uintptr_t beg, size_t num_bytes,
-                      csi_id_t store_id) {
+  __attribute__((noinline))
+  void report_write_race(uintptr_t addr, csi_id_t store_id,
+                         const os_label& cur_lab, const shadow_label& lab) {
+    auto store = __csi_get_store_source_loc(store_id);
+    outs_red
+        << "WRITE RACE ON BYTE " << std::hex << addr
+        << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
+        << std::dec << cur_lab << " WITH "
+        << lab
+        << std::endl;
+    outs_red << "BY " << std::dec << cur_lab
+         << std::endl;
+    if (store)
+      outs_red << "@ " << store->filename << " Ln " << std::dec
+               << store->line_number << " Col " << std::dec
+               << store->column_number << std::endl;
+    outs_red << "======================" << std::endl;
+    _exit(EXIT_FAILURE);
+  }
+
+  __attribute__((noinline))
+  void report_read_race(uintptr_t addr, csi_id_t load_id,
+                        const os_label& cur_lab, const shadow_label& lab) {
+    auto store = __csi_get_load_source_loc(load_id);
+    outs_red
+        << "READ RACE ON BYTE " << std::hex << addr
+        << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
+        << std::dec << cur_lab << " WITH "
+        << lab
+        << std::endl;
+    outs_red << "BY " << std::dec << cur_lab
+             << std::endl;
+    if (store)
+      outs_red << "@ " << store->filename << " Ln " << std::dec
+               << store->line_number << " Col " << std::dec
+               << store->column_number << std::endl;
+    outs_red << "======================" << std::endl;
+    _exit(EXIT_FAILURE);
+  }
+
+  __attribute__((always_inline))
+  inline void register_write(uintptr_t beg, size_t num_bytes,
+                             csi_id_t store_id) {
     const auto& cur_lab = *__cilkrts_get_os_label().label;
     shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      if (lab.does_write_race(cur_lab) && !is_benign_stdlib_race(addr)) {
-        auto store = __csi_get_store_source_loc(store_id);
-        outs_red
-            << "WRITE RACE ON BYTE " << std::hex << addr
-            << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
-            << std::dec << cur_lab << " WITH "
-            << lab
-            << std::endl;
-        outs_red << "BY " << std::dec << cur_lab
-             << std::endl;
-        if (store)
-          outs_red << "@ " << store->filename << " Ln " << std::dec
-                   << store->line_number << " Col " << std::dec
-                   << store->column_number << std::endl;
-        outs_red << "======================" << std::endl;
-        _exit(EXIT_FAILURE);
+      if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
+        if (!is_benign_stdlib_race(addr)) {
+          report_write_race(addr, store_id, cur_lab, lab);
+        }
       }
     });
   }
 
-  void register_read(uintptr_t beg, size_t num_bytes,
-                     csi_id_t load_id) {
+  __attribute__((always_inline))
+  inline void register_read(uintptr_t beg, size_t num_bytes,
+                            csi_id_t load_id) {
     const auto& cur_lab = *__cilkrts_get_os_label().label;
     shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      if (lab.does_read_race(cur_lab) && !is_benign_stdlib_race(addr)) {
-        auto store = __csi_get_load_source_loc(load_id);
-        outs_red
-            << "READ RACE ON BYTE " << std::hex << addr
-            << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
-            << std::dec << cur_lab << " WITH "
-            << lab
-            << std::endl;
-        outs_red << "BY " << std::dec << cur_lab
-                 << std::endl;
-        if (store)
-          outs_red << "@ " << store->filename << " Ln " << std::dec
-                   << store->line_number << " Col " << std::dec
-                   << store->column_number << std::endl;
-        outs_red << "======================" << std::endl;
-        _exit(EXIT_FAILURE);
+      if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
+        if (!is_benign_stdlib_race(addr)) {
+          report_read_race(addr, load_id, cur_lab, lab);
+        }
       }
     });
   }

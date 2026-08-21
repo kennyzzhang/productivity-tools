@@ -80,8 +80,8 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
 #endif
   // Putting this guard here shouldn't affect correctness but might make us faster
   // As we filter out reads that are about to be writes anyway
-  //if (prop.is_read_before_write_in_bb)
-  //  return;
+  if (prop.is_read_before_write_in_bb)
+    return;
   if (!HAS_INIT) return;
   tool->register_read((uint64_t)addr, num_bytes, load_id);
 }
@@ -113,8 +113,8 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
 #endif
   // Putting this guard here shouldn't affect correctness but might make us faster
   // As we filter out reads that are about to be writes anyway
-  //if (prop.is_read_before_write_in_bb)
-  //  return;
+  if (prop.is_read_before_write_in_bb)
+    return;
   if (!HAS_INIT) return;
   tool->register_read((uint64_t)addr, num_bytes, load_id);
 }

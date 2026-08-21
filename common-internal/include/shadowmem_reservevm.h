@@ -34,7 +34,8 @@ public:
     // outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
   }
 
-  Value& addr_to_shadow(uintptr_t addr) {
+  __attribute__((always_inline))
+  inline Value& addr_to_shadow(uintptr_t addr) const {
 #ifdef TRACE_CALLS
     outs_red << "addr_to_shadow(" << std::hex << addr << ")" << std::endl;
 #endif
@@ -42,8 +43,9 @@ public:
 
     // We have to be piecewise. Project the addresses above our shadow memory as
     // if they were glued onto the lower addresses below our shadow memory.
-    assert(addr < shadowmem && addr >= shadowmem + vmem_shadow_size && "Addr already within vmem shadow?!?");
-    if (addr >= shadowmem + vmem_shadow_size) {
+    assert((addr < shadowmem || addr >= shadowmem + vmem_shadow_size) && "Addr already within vmem shadow?!?");
+    //TODO: builtin_expect is fishy here, depending on placement. But probably fine.
+    if (__builtin_expect(addr >= shadowmem + vmem_shadow_size, 0)) {
       addr -= vmem_shadow_size;
     }
 
@@ -52,7 +54,7 @@ public:
 #endif
 
     // Now we have to re-scale our address onto our shadow mapping.
-    // Fortunately, since each byte indexes into the array, we can just...
+    // Fortunately, since each granule/byte indexes into the array, we can just...
     // index.
     Value *shadow_addr =
         &((Value *)shadowmem)[addr / vmem_shadow_granularity];
@@ -64,12 +66,17 @@ public:
   }
 
   template<typename Fn>
-  void for_each(uintptr_t beg, uintptr_t end, Fn fn) {
+  __attribute__((always_inline))
+  inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
+    // Fast-path :)
     size_t num_bytes = end - beg;
+    if (__builtin_expect(num_bytes <= vmem_shadow_granularity, 1)) {
+      fn(beg, addr_to_shadow(beg));
+      return;
+    }
+    
     Value *labels = &addr_to_shadow(beg);
-    size_t num_granules =
-        (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
-    // Clamp to not walk past end of shadow memory
+    size_t num_granules = (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
     for (size_t i = 0; i < num_granules; i++) {
       fn(beg + i * vmem_shadow_granularity, labels[i]);
     }
