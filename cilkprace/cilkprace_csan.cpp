@@ -83,8 +83,7 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
   //if (prop.is_read_before_write_in_bb)
   //  return;
   if (!HAS_INIT) return;
-  auto store = (const source_loc_t*) __csan_get_load_source_loc(load_id);
-  tool->register_read((uint64_t)addr, num_bytes, store);
+  tool->register_read((uint64_t)addr, num_bytes, load_id);
 }
 
 CILKSAN_API void __csan_before_loop(const csi_id_t loop_id,
@@ -117,8 +116,7 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
   //if (prop.is_read_before_write_in_bb)
   //  return;
   if (!HAS_INIT) return;
-  auto store = (const source_loc_t*) __csan_get_load_source_loc(load_id);
-  tool->register_read((uint64_t)addr, num_bytes, store);
+  tool->register_read((uint64_t)addr, num_bytes, load_id);
 }
 
 CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
@@ -132,10 +130,8 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   if (!HAS_INIT) return;
-  auto store = (const source_loc_t*) __csan_get_store_source_loc(store_id);
-  tool->register_write((uint64_t)addr, num_bytes, store);
+  tool->register_write((uint64_t)addr, num_bytes, store_id);
 }
 
 CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
@@ -149,10 +145,8 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  //TODO: Reads and writes aren't fixed-width and on the same boundaries. It's an overlapping problem. We'll have to resolve this.
   if (!HAS_INIT) return;
-  auto store = (const source_loc_t*) __csan_get_store_source_loc(store_id);
-  tool->register_write((uint64_t)addr, num_bytes, store);
+  tool->register_write((uint64_t)addr, num_bytes, store_id);
 }
 
 CILKSAN_API void __csan_task(const csi_id_t task_id, const csi_id_t detach_id,
@@ -333,16 +327,16 @@ CILKSAN_API void __csan_get_MAAP(MAAP_t *ptr, csi_id_t id, unsigned idx) {
 }
 
 // This is what libhooks translates things in to
-// Helper function for checking a function that reads len bytes starting at ptr.
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
                                     uintptr_t ptr, size_t len) {
   if (!HAS_INIT) return;
-  auto store = (const source_loc_t*) __csan_get_load_source_loc(call_id);
 #ifdef TRACE_CALLS
+  auto store = (const source_loc_t*) __csan_get_load_source_loc(call_id);
+
   outs_red << "CHECK READ ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Mod)) {
-    tool->register_read((uint64_t)ptr, len, store);
+    tool->register_read((uint64_t)ptr, len, call_id);
   }
 }
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
@@ -355,12 +349,12 @@ void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
 void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
                                      uintptr_t ptr, size_t len) {
   if (!HAS_INIT) return;
-  auto store = (const source_loc_t*) __csan_get_store_source_loc(call_id);
 #ifdef TRACE_CALLS
+  auto store = (const source_loc_t*) __csan_get_store_source_loc(call_id);
   outs_red << "CHECK WRITE ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Ref)) {
-    tool->register_write((uint64_t)ptr, len, store);
+    tool->register_write((uint64_t)ptr, len, call_id);
   }
 }
 

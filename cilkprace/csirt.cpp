@@ -150,11 +150,11 @@ static inline const source_loc_t *get_fed_entry(fed_type_t fed_type,
   fed_table_t *table = &fed_tables[fed_type];
 
   //std::printf("GET FED NUM ENTRIES %ld TYPE %ld WANT %ld\n", table->num_entries, fed_type, csi_id);
-  for (int j = 0; j < table->num_entries; j++)
+  /*for (int j = 0; j < table->num_entries; j++)
   {
     auto& entry = table->entries[j];
     //std::printf("%s: (%d, %d)\n", entry.name, entry.line_number, entry.column_number);
-  }
+  }*/
 
   if (csi_id < table->num_entries) {
     assert(table->entries != NULL);

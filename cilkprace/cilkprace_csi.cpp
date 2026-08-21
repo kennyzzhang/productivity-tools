@@ -57,10 +57,7 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
 #endif
   // Putting this guard here shouldn't affect correctness but might make us
   // faster As we filter out reads that are about to be writes anyway
-  // if (prop.is_read_before_write_in_bb)
-  //  return;
-  auto store = __csi_get_load_source_loc(load_id);
-  tool->register_read((uint64_t)addr, num_bytes, store);
+  tool->register_read((uint64_t)addr, num_bytes, load_id);
 }
 
 CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
@@ -92,8 +89,7 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
 #endif
   // TODO: Reads and writes aren't fixed-width and on the same boundaries. It's
   // an overlapping problem. We'll have to resolve this.
-  auto store = __csi_get_store_source_loc(store_id);
-  tool->register_write((uint64_t)addr, num_bytes, store);
+  tool->register_write((uint64_t)addr, num_bytes, store_id);
 }
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,

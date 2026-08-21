@@ -152,10 +152,11 @@ public:
   }
 
   void register_write(uintptr_t beg, size_t num_bytes,
-                      const source_loc_t *store) {
+                      csi_id_t store_id) {
     const auto& cur_lab = *__cilkrts_get_os_label().label;
     shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
       if (lab.does_write_race(cur_lab) && !is_benign_stdlib_race(addr)) {
+        auto store = __csi_get_store_source_loc(store_id);
         outs_red
             << "WRITE RACE ON BYTE " << std::hex << addr
             << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
@@ -175,10 +176,11 @@ public:
   }
 
   void register_read(uintptr_t beg, size_t num_bytes,
-                     const source_loc_t *store) {
+                     csi_id_t load_id) {
     const auto& cur_lab = *__cilkrts_get_os_label().label;
     shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
       if (lab.does_read_race(cur_lab) && !is_benign_stdlib_race(addr)) {
+        auto store = __csi_get_load_source_loc(load_id);
         outs_red
             << "READ RACE ON BYTE " << std::hex << addr
             << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
