@@ -82,12 +82,12 @@ public:
   template<typename Fn>
   __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
-    size_t num_bytes = end - beg;
-    size_t num_granules = (num_bytes + Granularity - 1) / Granularity;
+    uintptr_t beg_idx = base::floordivgrain(beg);
+    uintptr_t end_idx = base::ceildivgrain(end);
     #pragma unroll 2
-    for (size_t i = 0; i < num_granules; ++i) {
-      uintptr_t cur_addr = beg + i * Granularity;
-      fn(cur_addr, pt[cur_addr / Granularity]);
+    for (uintptr_t idx = beg_idx; idx != end_idx; idx++) {
+      // TODO: smarter walking of page table
+      fn(idx * Granularity, pt[idx]);
     }
   }
 };
