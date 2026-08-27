@@ -1,7 +1,6 @@
 #include "cilkprace.h"
 #include "stack.h"
 
-extern std::unique_ptr<CilkpraceImpl_t> tool;
 extern bool HAS_INIT;
 
 inline unsigned worker_number() {
@@ -82,8 +81,8 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
   // As we filter out reads that are about to be writes anyway
   if (prop.is_read_before_write_in_bb)
     return;
-  if (!HAS_INIT) return;
-  tool->register_read((uint64_t)addr, num_bytes, load_id);
+  if (__builtin_expect(!HAS_INIT, 0)) return;
+  tool_instance.register_read((uint64_t)addr, num_bytes, load_id);
 }
 
 CILKSAN_API void __csan_before_loop(const csi_id_t loop_id,
@@ -115,8 +114,8 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
   // As we filter out reads that are about to be writes anyway
   if (prop.is_read_before_write_in_bb)
     return;
-  if (!HAS_INIT) return;
-  tool->register_read((uint64_t)addr, num_bytes, load_id);
+  if (__builtin_expect(!HAS_INIT, 0)) return;
+  tool_instance.register_read((uint64_t)addr, num_bytes, load_id);
 }
 
 CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
@@ -130,8 +129,8 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  if (!HAS_INIT) return;
-  tool->register_write((uint64_t)addr, num_bytes, store_id);
+  if (__builtin_expect(!HAS_INIT, 0)) return;
+  tool_instance.register_write((uint64_t)addr, num_bytes, store_id);
 }
 
 CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
@@ -145,8 +144,8 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  if (!HAS_INIT) return;
-  tool->register_write((uint64_t)addr, num_bytes, store_id);
+  if (__builtin_expect(!HAS_INIT, 0)) return;
+  tool_instance.register_write((uint64_t)addr, num_bytes, store_id);
 }
 
 CILKSAN_API void __csan_task(const csi_id_t task_id, const csi_id_t detach_id,
@@ -222,7 +221,7 @@ void __csan_after_alloca(const csi_id_t alloca_id, const void *addr,
       << ", addr=" << addr << ", nb=" << num_bytes << ", static="
       << prop.is_static << ")" << std::endl;
 #endif
-  tool->register_alloca((uintptr_t) addr, num_bytes);
+  tool_instance.register_alloca((uintptr_t) addr, num_bytes);
 }
 
 CILKSAN_API
@@ -249,7 +248,7 @@ void __csan_after_allocfn(const csi_id_t allocfn_id, const void *addr,
       << alignment << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty
       << ")" << std::endl;
 #endif
-  tool->register_allocfn((uintptr_t) addr, size * num);
+  tool_instance.register_allocfn((uintptr_t) addr, size * num);
 }
 
 CILKSAN_API
@@ -261,7 +260,7 @@ void __csan_alloc_strdup(const csi_id_t allocfn_id, const csi_id_t func_id,
            << ", fid=" << func_id << ", res=" << (void *)result << ")"
            << std::endl;
 #endif
-  tool->register_alloc_strdup((uintptr_t) result, str);
+  tool_instance.register_alloc_strdup((uintptr_t) result, str);
 }
 
 CILKSAN_API
@@ -272,7 +271,7 @@ void __csan_before_free(const csi_id_t free_id, const void *ptr,
       << "[W" << worker_number() << "] before_free(fid=" << free_id
       << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
-  tool->register_free((uintptr_t) ptr);
+  tool_instance.register_free((uintptr_t) ptr);
 }
 
 CILKSAN_API
@@ -336,7 +335,7 @@ void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
   outs_red << "CHECK READ ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Mod)) {
-    tool->register_read((uint64_t)ptr, len, call_id);
+    tool_instance.register_read((uint64_t)ptr, len, call_id);
   }
 }
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
@@ -354,7 +353,7 @@ void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
   outs_red << "CHECK WRITE ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
   if (checkMAAP(MAAPVal, MAAP_t::Ref)) {
-    tool->register_write((uint64_t)ptr, len, call_id);
+    tool_instance.register_write((uint64_t)ptr, len, call_id);
   }
 }
 

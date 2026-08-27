@@ -12,7 +12,6 @@
 #include "csan.h"
 #include "stack.h"
 
-extern std::unique_ptr<CilkpraceImpl_t> tool;
 
 bool HAS_INIT = false;
 #define CILKSAN_INITIALIZED HAS_INIT
@@ -47,7 +46,7 @@ CILKSAN_API void __cilksan_record_alloc(const void *ptr, size_t num_bytes) {
     return;
   // Report an alloc as a write later.
   // FIXME: Should this be register allocfn?
-  tool->register_alloca((uintptr_t) ptr, num_bytes);
+  tool_instance.register_alloca((uintptr_t) ptr, num_bytes);
 };
 CILKSAN_API void __cilksan_record_free(const void *ptr) {
   outs_red << "UNHANDLED FREE" << std::endl;
@@ -690,7 +689,7 @@ CILKSAN_API void __csan_llvm_stacksave(const csi_id_t call_id,
   if (!is_execution_parallel())
     return;
 
-  tool->advance_stack_frame((uintptr_t)sp);
+  tool_instance.advance_stack_frame((uintptr_t)sp);
 }
 
 CILKSAN_API void __csan_llvm_stackrestore(const csi_id_t call_id,
@@ -705,7 +704,7 @@ CILKSAN_API void __csan_llvm_stackrestore(const csi_id_t call_id,
   if (!is_execution_parallel())
     return;
 
-  tool->restore_stack(call_id, (uintptr_t)sp);
+  tool_instance.restore_stack(call_id, (uintptr_t)sp);
 }
 
 CILKSAN_API void

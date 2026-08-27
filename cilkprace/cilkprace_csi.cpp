@@ -1,6 +1,5 @@
 #include "cilkprace.h"
 
-extern std::unique_ptr<CilkpraceImpl_t> tool;
 extern bool HAS_INIT;
 
 inline unsigned worker_number() {
@@ -59,7 +58,7 @@ CILKTOOL_API void __csi_before_load(const csi_id_t load_id, const void *addr,
   // faster As we filter out reads that are about to be writes anyway
   if (prop.is_read_before_write_in_bb)
     return;
-  tool->register_read((uint64_t)addr, num_bytes, load_id);
+  tool_instance.register_read((uint64_t)addr, num_bytes, load_id);
 }
 
 CILKTOOL_API void __csi_after_load(const csi_id_t load_id, const void *addr,
@@ -91,7 +90,7 @@ CILKTOOL_API void __csi_before_store(const csi_id_t store_id, const void *addr,
 #endif
   // TODO: Reads and writes aren't fixed-width and on the same boundaries. It's
   // an overlapping problem. We'll have to resolve this.
-  tool->register_write((uint64_t)addr, num_bytes, store_id);
+  tool_instance.register_write((uint64_t)addr, num_bytes, store_id);
 }
 
 CILKTOOL_API void __csi_after_store(const csi_id_t store_id, const void *addr,
@@ -173,7 +172,7 @@ void __csi_after_alloca(const csi_id_t alloca_id, const void *addr,
            << ", addr=" << addr << ", nb=" << num_bytes
            << ", static=" << prop.is_static << ")" << std::endl;
 #endif
-  tool->register_alloca((uintptr_t) addr, num_bytes);
+  tool_instance.register_alloca((uintptr_t) addr, num_bytes);
 }
 
 CILKTOOL_API
@@ -199,7 +198,7 @@ void __csi_after_allocfn(const csi_id_t allocfn_id, const void *addr,
            << ", type=" << prop.allocfn_ty << ")" << std::endl;
 #endif
 
-  tool->register_allocfn((uintptr_t) addr, size * num);
+  tool_instance.register_allocfn((uintptr_t) addr, size * num);
 }
 
 CILKTOOL_API
@@ -210,7 +209,7 @@ void __csi_before_free(const csi_id_t free_id, const void *ptr,
            << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
 
-  tool->register_free((uintptr_t) ptr);
+  tool_instance.register_free((uintptr_t) ptr);
 }
 
 CILKTOOL_API
