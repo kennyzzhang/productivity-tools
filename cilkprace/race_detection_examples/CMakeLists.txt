@@ -187,7 +187,7 @@ foreach(variant IN LISTS all_race_detectors)
 endforeach()
 
 foreach(variant IN LISTS all_has_cilk)
-  target_compile_options(label_test.${variant}.if INTERFACE -fopencilk-enable-pedigrees)
+  target_compile_options(label_test.${variant}.if INTERFACE -fopencilk-enable-pedigrees -fno-exceptions)
   target_link_options(label_test.${variant}.if INTERFACE -fopencilk-enable-pedigrees)
 endforeach()
 
