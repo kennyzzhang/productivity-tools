@@ -165,24 +165,26 @@ public:
   void report_read_race(uintptr_t addr, csi_id_t load_id,
                         const os_label& cur_lab, const shadow_label& lab);
 
+  __attribute__((always_inline))
   inline void register_write(uintptr_t beg, size_t num_bytes,
                              csi_id_t store_id) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
     const auto& cur_lab = *__cilkrts_get_current_os_label();
     shadow_mem.for_each(beg, beg + num_bytes,
-      [&](uintptr_t addr, shadow_label& lab) {
+      [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
         if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
           report_write_race(addr, store_id, cur_lab, lab);
         }
       });
   }
 
+  __attribute__((always_inline))
   inline void register_read(uintptr_t beg, size_t num_bytes,
                             csi_id_t load_id) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
     const auto& cur_lab = *__cilkrts_get_current_os_label();
     shadow_mem.for_each(beg, beg + num_bytes,
-      [&](uintptr_t addr, shadow_label& lab) {
+      [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
         if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
           report_read_race(addr, load_id, cur_lab, lab);
         }
