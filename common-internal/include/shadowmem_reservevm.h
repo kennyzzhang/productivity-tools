@@ -67,6 +67,7 @@ public:
   }
 
   template<typename Fn>
+  __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
     // Single granule fast-path :)
     if (__builtin_expect((beg ^ (end - 1)) < vmem_shadow_granularity, 1)) {

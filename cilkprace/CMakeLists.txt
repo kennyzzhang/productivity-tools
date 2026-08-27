@@ -50,7 +50,7 @@ set(CILKPRACE_DYNAMIC_LIBS ${CILKPRACE_COMMON_LIBS})
 # Setup flags and defs for cilktool bitcode build
 set(CILKPRACE_BITCODE_CFLAGS ${CILKPRACE_CFLAGS} -emit-llvm)
 set(CILKPRACE_BITCODE_DEFINITIONS ${CILKPRACE_COMMON_DEFINITIONS}
-    "CILKPRACE_VIS=inline")
+    "CILKPRACE_VIS=")
 
 # Build Cilkprace runtimes shipped with Clang.
 add_cilktools_component(cilkprace)

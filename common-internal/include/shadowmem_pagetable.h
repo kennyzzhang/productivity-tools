@@ -80,6 +80,7 @@ public:
   }
 
   template<typename Fn>
+  __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
     // Single Granule fast-path :)
     if (__builtin_expect((beg ^ (end - 1)) < Granularity, 1)) {
