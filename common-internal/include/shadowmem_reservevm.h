@@ -36,11 +36,6 @@ public:
     // outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
   }
 
-  __attribute__((noinline, cold, preserve_most))
-  uintptr_t adjust_high_addr(uintptr_t addr) const {
-    return addr - vmem_shadow_size;
-  }
-
   __attribute__((always_inline))
   inline Value& addr_to_shadow(uintptr_t addr) const {
 #ifdef TRACE_CALLS
@@ -52,7 +47,7 @@ public:
     // if they were glued onto the lower addresses below our shadow memory.
     assert((addr < shadowmem || addr >= shadowmem_end) && "Addr already within vmem shadow?!?");
     if (__builtin_expect(addr >= shadowmem_end, 0)) {
-      addr = adjust_high_addr(addr);
+      addr -= vmem_shadow_size;
     }
 
 #ifdef TRACE_CALLS

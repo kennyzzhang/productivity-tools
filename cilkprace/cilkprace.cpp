@@ -1,5 +1,5 @@
 #include "cilkprace.h"
 
-CilkpraceImpl_t tool_instance;
+__attribute__((visibility("default"))) CilkpraceImpl_t tool_instance;
 
 

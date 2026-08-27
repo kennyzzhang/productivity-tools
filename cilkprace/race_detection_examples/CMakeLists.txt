@@ -165,6 +165,27 @@ foreach(test IN LISTS all_tests)
   target_compile_options(${test}.cilkpiston.if INTERFACE -fsanitize=cilkpiston)
 endforeach()
 
+execute_process(
+  COMMAND ${CMAKE_C_COMPILER} -print-resource-dir
+  OUTPUT_VARIABLE CLANG_RESOURCE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+foreach(variant IN LISTS all_race_detectors)
+  file(GLOB ${variant}_bc_files
+    "${CLANG_RESOURCE_DIR}/lib/darwin/lib${variant}*.bc"
+    "${CLANG_RESOURCE_DIR}/lib/*/lib${variant}*.bc"
+    "${CLANG_RESOURCE_DIR}/lib/lib${variant}*.bc"
+  )
+  if(${variant}_bc_files)
+    list(GET ${variant}_bc_files 0 ${variant}_bc_path)
+    message(STATUS "Found ${variant} bitcode: ${${variant}_bc_path}")
+    foreach(test IN LISTS all_tests)
+      target_compile_options(${test}.${variant}.if INTERFACE "SHELL:-mllvm -cilksan-bc-path=${${variant}_bc_path}")
+    endforeach()
+  endif()
+endforeach()
+
 foreach(variant IN LISTS all_has_cilk)
   target_compile_options(label_test.${variant}.if INTERFACE -fopencilk-enable-pedigrees)
   target_link_options(label_test.${variant}.if INTERFACE -fopencilk-enable-pedigrees)
