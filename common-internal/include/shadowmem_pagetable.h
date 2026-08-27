@@ -82,17 +82,12 @@ public:
   template<typename Fn>
   __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
-    // Single Granule fast-path :)
-    if (__builtin_expect((beg ^ (end - 1)) < Granularity, 1)) {
-      uintptr_t idx = beg / Granularity;
-      fn(beg, pt[idx]);
-      return;
-    }
-    beg = base::floordivgrain(beg);
-    end = base::ceildivgrain(end);
-    for (uintptr_t i = beg; i != end; i++) {
-      // TODO: smarter walking of page table
-      fn(i * Granularity, pt[i]);
+    size_t num_bytes = end - beg;
+    size_t num_granules = (num_bytes + Granularity - 1) / Granularity;
+    #pragma unroll 2
+    for (size_t i = 0; i < num_granules; ++i) {
+      uintptr_t cur_addr = beg + i * Granularity;
+      fn(cur_addr, pt[cur_addr / Granularity]);
     }
   }
 };
