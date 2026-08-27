@@ -104,7 +104,7 @@ extern ustack_reducer MAAP_counts;
 
 // FIXME
 __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
-  return !__cilkrts_get_os_label().label->is_serial();
+  return !__cilkrts_get_current_os_label()->is_serial();
 }
 
 class CilkpraceImpl_t {
@@ -154,6 +154,7 @@ public:
   __attribute__((noinline))
   void report_write_race(uintptr_t addr, csi_id_t store_id,
                          const os_label& cur_lab, const shadow_label& lab) {
+    if (ignore_stdlib_races && is_benign_stdlib_race(addr)) return;
     auto store = __csi_get_store_source_loc(store_id);
     outs_red
         << "WRITE RACE ON BYTE " << std::hex << addr
@@ -174,6 +175,7 @@ public:
   __attribute__((noinline))
   void report_read_race(uintptr_t addr, csi_id_t load_id,
                         const os_label& cur_lab, const shadow_label& lab) {
+    if (ignore_stdlib_races && is_benign_stdlib_race(addr)) return;
     auto store = __csi_get_load_source_loc(load_id);
     outs_red
         << "READ RACE ON BYTE " << std::hex << addr
@@ -191,36 +193,53 @@ public:
     _exit(EXIT_FAILURE);
   }
 
+  static constexpr size_t Granularity =
+      decltype(shadow_mem)::vmem_shadow_granularity;
+
   __attribute__((always_inline))
   inline void register_write(uintptr_t beg, size_t num_bytes,
                              csi_id_t store_id) {
-    const auto& cur_lab = *__cilkrts_get_os_label().label;
-    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
+    if (__builtin_expect(num_bytes == 0, 0)) return;
+    const auto& cur_lab = *__cilkrts_get_current_os_label();
+    shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+    size_t num_granules =
+        ((beg + num_bytes - 1) / Granularity) - (beg / Granularity) + 1;
+    uintptr_t base_addr = beg & ~(Granularity - 1);
+    for (size_t i = 0; i < num_granules; ++i) {
+      if (__builtin_expect(labels[i].does_write_race(cur_lab), 0)) {
+        uintptr_t addr = base_addr + i * Granularity;
         if (!is_benign_stdlib_race(addr)) {
-          report_write_race(addr, store_id, cur_lab, lab);
+          report_write_race(addr, store_id, cur_lab, labels[i]);
         }
       }
-    });
+    }
   }
 
   __attribute__((always_inline))
   inline void register_read(uintptr_t beg, size_t num_bytes,
                             csi_id_t load_id) {
-    const auto& cur_lab = *__cilkrts_get_os_label().label;
-    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
+    if (__builtin_expect(num_bytes == 0, 0)) return;
+    const auto& cur_lab = *__cilkrts_get_current_os_label();
+    shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+    size_t num_granules =
+        ((beg + num_bytes - 1) / Granularity) - (beg / Granularity) + 1;
+    uintptr_t base_addr = beg & ~(Granularity - 1);
+    for (size_t i = 0; i < num_granules; ++i) {
+      if (__builtin_expect(labels[i].does_read_race(cur_lab), 0)) {
+        uintptr_t addr = base_addr + i * Granularity;
         if (!is_benign_stdlib_race(addr)) {
-          report_read_race(addr, load_id, cur_lab, lab);
+          report_read_race(addr, load_id, cur_lab, labels[i]);
         }
       }
-    });
+    }
   }
 
   void register_alloca(uintptr_t beg, size_t num_bytes) {
-    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      memset(&lab, 0, sizeof(shadow_label));
-    });
+    if (__builtin_expect(num_bytes == 0, 0)) return;
+    shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+    size_t num_granules =
+        ((beg + num_bytes - 1) / Granularity) - (beg / Granularity) + 1;
+    memset(labels, 0, num_granules * sizeof(shadow_label));
   }
 
   void register_allocfn(uintptr_t addr, size_t nb) {

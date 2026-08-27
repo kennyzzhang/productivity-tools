@@ -10,6 +10,7 @@
 template<typename Value, size_t Granularity>
 class shadowmem_reservevm : public shadowmem<shadowmem_reservevm<Value, Granularity>> {
   uintptr_t shadowmem;
+  uintptr_t shadowmem_end;
 public:
   static constexpr size_t vmem_bytes = 0x00007fffffffffff;
   static constexpr size_t overhead_per_byte = sizeof(Value);
@@ -28,6 +29,7 @@ public:
       perror("SHADOW MEM");
       _exit(1);
     }
+    shadowmem_end = shadowmem + vmem_shadow_size;
     // outs_red << "SHADOW MEM: " << shadowmem << std::endl;
     outs_red << "Want mem size: " << vmem_shadow_size << " = 2^"
              << log2(vmem_shadow_size) << std::endl;
@@ -43,9 +45,9 @@ public:
 
     // We have to be piecewise. Project the addresses above our shadow memory as
     // if they were glued onto the lower addresses below our shadow memory.
-    assert((addr < shadowmem || addr >= shadowmem + vmem_shadow_size) && "Addr already within vmem shadow?!?");
+    assert((addr < shadowmem || addr >= shadowmem_end) && "Addr already within vmem shadow?!?");
     //TODO: builtin_expect is fishy here, depending on placement. But probably fine.
-    if (__builtin_expect(addr >= shadowmem + vmem_shadow_size, 0)) {
+    if (__builtin_expect(addr >= shadowmem_end, 0)) {
       addr -= vmem_shadow_size;
     }
 
@@ -60,7 +62,7 @@ public:
         &((Value *)shadowmem)[addr / vmem_shadow_granularity];
 
     assert((uintptr_t)shadow_addr >= shadowmem &&
-           (uintptr_t)shadow_addr < shadowmem + vmem_shadow_size && "Shadow addr projected OOB!");
+           (uintptr_t)shadow_addr < shadowmem_end && "Shadow addr projected OOB!");
 
     return *shadow_addr;
   }
@@ -68,13 +70,7 @@ public:
   template<typename Fn>
   __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
-    // Fast-path :)
     size_t num_bytes = end - beg;
-    if (__builtin_expect(num_bytes <= vmem_shadow_granularity, 1)) {
-      fn(beg, addr_to_shadow(beg));
-      return;
-    }
-    
     Value *labels = &addr_to_shadow(beg);
     size_t num_granules = (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;
     for (size_t i = 0; i < num_granules; i++) {
