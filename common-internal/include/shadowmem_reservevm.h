@@ -67,8 +67,12 @@ public:
   }
 
   template<typename Fn>
-  __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
+    // Single granule fast-path :)
+    if (__builtin_expect((beg ^ (end - 1)) < vmem_shadow_granularity, 1)) {
+      fn(beg, addr_to_shadow(beg));
+      return;
+    }
     size_t num_bytes = end - beg;
     Value *labels = &addr_to_shadow(beg);
     size_t num_granules = (num_bytes + vmem_shadow_granularity - 1) / vmem_shadow_granularity;

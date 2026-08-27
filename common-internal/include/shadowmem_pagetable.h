@@ -80,20 +80,18 @@ public:
   }
 
   template<typename Fn>
-  __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
     // Single Granule fast-path :)
-    size_t num_bytes = end - beg;
-    if (__builtin_expect(num_bytes <= Granularity, 1)) {
+    if (__builtin_expect((beg ^ (end - 1)) < Granularity, 1)) {
       uintptr_t idx = beg / Granularity;
-      fn(idx, pt[idx]);
+      fn(beg, pt[idx]);
       return;
     }
     beg = base::floordivgrain(beg);
     end = base::ceildivgrain(end);
     for (uintptr_t i = beg; i != end; i++) {
       // TODO: smarter walking of page table
-      fn(i, pt[i]);
+      fn(i * Granularity, pt[i]);
     }
   }
 };

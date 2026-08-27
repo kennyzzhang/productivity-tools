@@ -23,10 +23,13 @@
 #define TRACE_CALLS 1
 #undef TRACE_CALLS
 
+#ifndef CILKPRACE_VIS
+#define CILKPRACE_VIS
+#endif
 #define CILKTOOL_API extern "C" __attribute__((visibility("default")))
-#define CILKSAN_API extern "C" __attribute__((visibility("default")))
+#define CILKSAN_API extern "C" CILKPRACE_VIS __attribute__((visibility("default")))
 
-extern bool HAS_INIT;
+extern __attribute__((visibility("default"))) bool HAS_INIT;
 
 // Stack structures for keeping track of MAAP (May Access Alias in Parallel)
 // information inserted by the compiler before a call.
@@ -70,12 +73,16 @@ static void reduce_MAAPstack(void *left_view, void *right_view) {
   right->~MAAPstack();
 }
 
+typedef MAAPstack cilk_reducer(init_MAAPstack,
+                               reduce_MAAPstack) MAAPstack_reducer;
+
 static void init_ustack(void *view) {
 #if TRACE_CALLS
   std::cerr << "init ustack" << std::endl;
 #endif
   new (view) ustack();
 }
+
 static void reduce_ustack(void *left_view, void *right_view) {
 #if TRACE_CALLS
   std::cerr << "reduce ustack" << std::endl;
@@ -95,8 +102,6 @@ static void reduce_ustack(void *left_view, void *right_view) {
   right->~ustack();
 }
 
-typedef MAAPstack cilk_reducer(init_MAAPstack,
-                               reduce_MAAPstack) MAAPstack_reducer;
 typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
 
 extern MAAPstack_reducer MAAPs;
@@ -139,7 +144,7 @@ public:
 
   ~CilkpraceImpl_t() {}
 
-  __attribute__((cold, preserve_most))
+  __attribute__((noinline, cold, preserve_most))
   bool is_benign_stdlib_race(uintptr_t race_addr) {
     if (!ignore_stdlib_races) return false;
     Dl_info info;
@@ -152,81 +157,44 @@ public:
     return false;
   }
 
-  __attribute__((noinline, cold, preserve_most))
+  __attribute__((noinline, cold, preserve_most, visibility("default")))
   void report_write_race(uintptr_t addr, csi_id_t store_id,
-                         const os_label& cur_lab, const shadow_label& lab) {
-    if (ignore_stdlib_races && is_benign_stdlib_race(addr)) return;
-    auto store = __csi_get_store_source_loc(store_id);
-    outs_red
-        << "WRITE RACE ON BYTE " << std::hex << addr
-        << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
-        << std::dec << cur_lab << " WITH "
-        << lab
-        << std::endl;
-    outs_red << "BY " << std::dec << cur_lab
-         << std::endl;
-    if (store)
-      outs_red << "@ " << store->filename << " Ln " << std::dec
-               << store->line_number << " Col " << std::dec
-               << store->column_number << std::endl;
-    outs_red << "======================" << std::endl;
-    _exit(EXIT_FAILURE);
-  }
+                         const os_label& cur_lab, const shadow_label& lab);
 
-  __attribute__((noinline, cold, preserve_most))
+  __attribute__((noinline, cold, preserve_most, visibility("default")))
   void report_read_race(uintptr_t addr, csi_id_t load_id,
-                        const os_label& cur_lab, const shadow_label& lab) {
-    if (ignore_stdlib_races && is_benign_stdlib_race(addr)) return;
-    auto store = __csi_get_load_source_loc(load_id);
-    outs_red
-        << "READ RACE ON BYTE " << std::hex << addr
-        << std::dec << "(+" << shadow_mem.vmem_shadow_granularity << ") BY "
-        << std::dec << cur_lab << " WITH "
-        << lab
-        << std::endl;
-    outs_red << "BY " << std::dec << cur_lab
-             << std::endl;
-    if (store)
-      outs_red << "@ " << store->filename << " Ln " << std::dec
-               << store->line_number << " Col " << std::dec
-               << store->column_number << std::endl;
-    outs_red << "======================" << std::endl;
-    _exit(EXIT_FAILURE);
-  }
+                        const os_label& cur_lab, const shadow_label& lab);
 
-  __attribute__((always_inline))
   inline void register_write(uintptr_t beg, size_t num_bytes,
                              csi_id_t store_id) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
     const auto& cur_lab = *__cilkrts_get_current_os_label();
-    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
-        if (!is_benign_stdlib_race(addr)) {
+    shadow_mem.for_each(beg, beg + num_bytes,
+      [&](uintptr_t addr, shadow_label& lab) {
+        if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
           report_write_race(addr, store_id, cur_lab, lab);
         }
-      }
-    });
+      });
   }
 
-  __attribute__((always_inline))
   inline void register_read(uintptr_t beg, size_t num_bytes,
                             csi_id_t load_id) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
     const auto& cur_lab = *__cilkrts_get_current_os_label();
-    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
-        if (!is_benign_stdlib_race(addr)) {
+    shadow_mem.for_each(beg, beg + num_bytes,
+      [&](uintptr_t addr, shadow_label& lab) {
+        if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
           report_read_race(addr, load_id, cur_lab, lab);
         }
-      }
-    });
+      });
   }
 
   void register_alloca(uintptr_t beg, size_t num_bytes) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
-    shadow_mem.for_each(beg, beg + num_bytes, [&](uintptr_t addr, shadow_label& lab) {
-      memset(&lab, 0, sizeof(shadow_label));
-    });
+    shadow_mem.for_each(beg, beg + num_bytes,
+      [&](uintptr_t addr, shadow_label& lab) {
+        memset(&lab, 0, sizeof(shadow_label));
+      });
   }
 
   void register_allocfn(uintptr_t addr, size_t nb) {
