@@ -86,14 +86,14 @@ public:
     size_t num_bytes = end - beg;
     if (__builtin_expect(num_bytes <= Granularity, 1)) {
       uintptr_t idx = beg / Granularity;
-      fn(idx, pt[idx]);
+      fn(idx * Granularity, pt[idx]);
       return;
     }
     beg = base::floordivgrain(beg);
     end = base::ceildivgrain(end);
     for (uintptr_t i = beg; i != end; i++) {
       // TODO: smarter walking of page table
-      fn(i, pt[i]);
+      fn(i * Granularity, pt[i]);
     }
   }
 };
