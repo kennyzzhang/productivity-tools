@@ -146,6 +146,9 @@ static inline void update_ids(fed_type_t fed_type, int64_t num_entries,
 // CSI ID.
 static inline const source_loc_t *get_fed_entry(fed_type_t fed_type,
                                                 const csi_id_t csi_id) {
+  if (!fed_tables || csi_id < 0)
+    return NULL;
+
   // TODO(ddoucet): threadsafety
   fed_table_t *table = &fed_tables[fed_type];
 

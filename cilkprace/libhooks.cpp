@@ -13,7 +13,7 @@
 #include "stack.h"
 
 
-bool HAS_INIT = false;
+__attribute__((visibility("default"))) bool HAS_INIT = false;
 #define CILKSAN_INITIALIZED HAS_INIT
 
 // FILE io used to print error messages
@@ -74,10 +74,11 @@ CILKSAN_API void __csan_default_libhook(const csi_id_t call_id,
   fprintf(err_io,
           "Cilksan Warning: Call to function '%s' not "
           "handled in %s (%s:%d:%d)\n",
-          (func_loc->name ? func_loc->name : "<no function name>"),
-          (src_loc->name ? src_loc->name : "<no function name>"),
-          (src_loc->filename ? src_loc->filename : "<no file name>"),
-          src_loc->line_number, src_loc->column_number);
+          (func_loc && func_loc->name ? func_loc->name : "<no function name>"),
+          (src_loc && src_loc->name ? src_loc->name : "<no function name>"),
+          (src_loc && src_loc->filename ? src_loc->filename : "<no file name>"),
+          src_loc ? src_loc->line_number : 0,
+          src_loc ? src_loc->column_number : 0);
 }
 
 ///////////////////////////////////////////////////////////////////////////
