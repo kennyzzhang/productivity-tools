@@ -7,7 +7,9 @@ void CilkpraceImpl_t::report_write_race(uintptr_t addr, csi_id_t store_id,
                                         const os_label& cur_lab, const shadow_label& lab) {
   if (ignore_stdlib_races && is_benign_stdlib_race(addr)) return;
   auto store = __csi_get_store_source_loc(store_id);
-  fprintf(stderr, "WRITE RACE ON BYTE %lx (+%zu)\n", (unsigned long)addr, shadow_mem.vmem_shadow_granularity);
+  fprintf(stderr, "WRITE RACE ON BYTE %lx (+%zu), return_addr=%p\n",
+          (unsigned long)addr, shadow_mem.vmem_shadow_granularity,
+          __builtin_return_address(0));
   if (store)
     fprintf(stderr, "@ %s Ln %d Col %d\n",
             store->filename ? store->filename : "<unknown>",
@@ -30,7 +32,7 @@ void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
   _exit(EXIT_FAILURE);
 }
 
-__attribute__((visibility("default")))
+__attribute__((noinline, cold, preserve_most, visibility("default")))
 bool shadow_label::does_read_race_slow(const os_label &reader) {
   range_check read_race;
   range_check write_race;
@@ -75,7 +77,7 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
   return write_race == parallel || write_race == within;
 }
 
-__attribute__((visibility("default")))
+__attribute__((noinline, cold, preserve_most, visibility("default")))
 bool shadow_label::does_write_race_slow(const os_label &writer) {
   range_check read_race;
   range_check write_race;
@@ -98,6 +100,15 @@ bool shadow_label::does_write_race_slow(const os_label &writer) {
 
   return (read_race == parallel || read_race == within) ||
          (write_race == parallel || write_race == within);
+}
+
+// Force external symbols for inline member functions so they are always exported by the runtime dylib
+__attribute__((visibility("default")))
+void __cilkprace_export_anchor() {
+  volatile auto p1 = &os_label::range_relation;
+  volatile auto p2 = &os_label::is_identical_slow;
+  (void)p1;
+  (void)p2;
 }
 
 

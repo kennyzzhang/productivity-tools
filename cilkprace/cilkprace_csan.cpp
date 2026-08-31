@@ -66,7 +66,8 @@ CILKSAN_API void __csan_func_exit(const csi_id_t func_exit_id, const csi_id_t fu
 
 
 CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
-                           int32_t num_bytes, const load_prop_t prop) {
+                           int32_t num_bytes, const load_prop_t prop,
+                           const os_label *cur_lab) {
 #ifdef TRACE_CALLS
   outs_red
       << "[W" << worker_number() << "] before_load(lid=" << load_id << ", addr="
@@ -82,7 +83,7 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
   if (prop.is_read_before_write_in_bb)
     return;
   if (__builtin_expect(!HAS_INIT, 0)) return;
-  tool_instance.register_read((uint64_t)addr, num_bytes, load_id);
+  tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
 }
 
 CILKSAN_API void __csan_before_loop(const csi_id_t loop_id,
@@ -99,7 +100,8 @@ CILKSAN_API void __csan_destroy_loop(const csi_id_t loop_id) {
 }
 
 CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
-                           int32_t num_bytes, const load_prop_t prop) {
+                           size_t num_bytes, const load_prop_t prop,
+                           const os_label *cur_lab) {
 #ifdef TRACE_CALLS
   outs_red
       << "[W" << worker_number() << "] before_load(lid=" << load_id << ", addr="
@@ -115,11 +117,12 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
   if (prop.is_read_before_write_in_bb)
     return;
   if (__builtin_expect(!HAS_INIT, 0)) return;
-  tool_instance.register_read((uint64_t)addr, num_bytes, load_id);
+  tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
 }
 
 CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
-                             int32_t num_bytes, const store_prop_t prop) {
+                             int32_t num_bytes, const store_prop_t prop,
+                             const os_label *cur_lab) {
 #ifdef TRACE_CALLS
   outs_red
       << "[W" << worker_number() << "] before_store(sid=" << store_id
@@ -130,11 +133,12 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
   if (__builtin_expect(!HAS_INIT, 0)) return;
-  tool_instance.register_write((uint64_t)addr, num_bytes, store_id);
+  tool_instance.register_write((uint64_t)addr, num_bytes, store_id, *cur_lab);
 }
 
 CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
-                             int32_t num_bytes, const store_prop_t prop) {
+                             size_t num_bytes, const store_prop_t prop,
+                             const os_label *cur_lab) {
 #ifdef TRACE_CALLS
   outs_red
       << "[W" << worker_number() << "] before_store(sid=" << store_id
@@ -145,7 +149,7 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
   if (__builtin_expect(!HAS_INIT, 0)) return;
-  tool_instance.register_write((uint64_t)addr, num_bytes, store_id);
+  tool_instance.register_write((uint64_t)addr, num_bytes, store_id, *cur_lab);
 }
 
 CILKSAN_API void __csan_task(const csi_id_t task_id, const csi_id_t detach_id,

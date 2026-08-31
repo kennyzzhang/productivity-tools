@@ -167,9 +167,9 @@ public:
 
   __attribute__((always_inline))
   inline void register_write(uintptr_t beg, size_t num_bytes,
-                             csi_id_t store_id) {
+                             csi_id_t store_id,
+                             const os_label& cur_lab) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
-    const auto& cur_lab = *__cilkrts_get_current_os_label();
     shadow_mem.for_each(beg, beg + num_bytes,
       [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
         if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
@@ -179,16 +179,28 @@ public:
   }
 
   __attribute__((always_inline))
+  inline void register_write(uintptr_t beg, size_t num_bytes,
+                             csi_id_t store_id) {
+    register_write(beg, num_bytes, store_id, *__cilkrts_get_current_os_label());
+  }
+
+  __attribute__((always_inline))
   inline void register_read(uintptr_t beg, size_t num_bytes,
-                            csi_id_t load_id) {
+                            csi_id_t load_id,
+                            const os_label& cur_lab) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
-    const auto& cur_lab = *__cilkrts_get_current_os_label();
     shadow_mem.for_each(beg, beg + num_bytes,
       [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
         if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
           report_read_race(addr, load_id, cur_lab, lab);
         }
       });
+  }
+
+  __attribute__((always_inline))
+  inline void register_read(uintptr_t beg, size_t num_bytes,
+                            csi_id_t load_id) {
+    register_read(beg, num_bytes, load_id, *__cilkrts_get_current_os_label());
   }
 
   void register_alloca(uintptr_t beg, size_t num_bytes) {
