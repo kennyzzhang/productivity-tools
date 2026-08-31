@@ -10,8 +10,8 @@ inline unsigned worker_number() {
 #pragma clang diagnostic pop
 }
 
-MAAPstack_reducer MAAPs;
-ustack_reducer MAAP_counts;
+__attribute__((visibility("default"))) MAAPstack_reducer MAAPs;
+__attribute__((visibility("default"))) ustack_reducer MAAP_counts;
 
 /*static*/ inline bool checkMAAP(MAAP_t val, MAAP_t flag) {
   return static_cast<uint8_t>(val) & static_cast<uint8_t>(flag);

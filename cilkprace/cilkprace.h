@@ -47,14 +47,14 @@ using pstack = Stack_t<uint8_t>;
 
 // Stack structures for keeping track of MAAPs for pointer arguments to function
 // calls
-static void init_MAAPstack(void *view) {
+__attribute__((visibility("default"))) inline void init_MAAPstack(void *view) {
 #if TRACE_CALLS
   std::cerr << "init MAAPSTACK" << std::endl;
 #endif
   new (view) MAAPstack();
 }
 
-static void reduce_MAAPstack(void *left_view, void *right_view) {
+__attribute__((visibility("default"))) inline void reduce_MAAPstack(void *left_view, void *right_view) {
 #if TRACE_CALLS
   std::cerr << "reduce MAAPSTACK" << std::endl;
 #endif
@@ -76,14 +76,14 @@ static void reduce_MAAPstack(void *left_view, void *right_view) {
 typedef MAAPstack cilk_reducer(init_MAAPstack,
                                reduce_MAAPstack) MAAPstack_reducer;
 
-static void init_ustack(void *view) {
+__attribute__((visibility("default"))) inline void init_ustack(void *view) {
 #if TRACE_CALLS
   std::cerr << "init ustack" << std::endl;
 #endif
   new (view) ustack();
 }
 
-static void reduce_ustack(void *left_view, void *right_view) {
+__attribute__((visibility("default"))) inline void reduce_ustack(void *left_view, void *right_view) {
 #if TRACE_CALLS
   std::cerr << "reduce ustack" << std::endl;
 #endif
@@ -104,12 +104,12 @@ static void reduce_ustack(void *left_view, void *right_view) {
 
 typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
 
-extern MAAPstack_reducer MAAPs;
-extern ustack_reducer MAAP_counts;
+extern __attribute__((visibility("default"))) MAAPstack_reducer MAAPs;
+extern __attribute__((visibility("default"))) ustack_reducer MAAP_counts;
 
-// FIXME
 __attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
-  return !__cilkrts_get_current_os_label()->is_serial();
+  const os_label *lab = __cilkrts_get_current_os_label();
+  return lab ? !lab->is_serial() : false;
 }
 
 class CilkpraceImpl_t {

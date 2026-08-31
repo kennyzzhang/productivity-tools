@@ -148,7 +148,7 @@ endforeach()
 
 foreach(test IN LISTS all_tests)
   foreach(variant IN LISTS all_race_detectors)
-    target_compile_options(${test}.${variant}.if INTERFACE "SHELL:-mllvm -enable-static-race-detection=false")
+    target_compile_options(${test}.${variant}.if INTERFACE "SHELL:-mllvm -enable-static-race-detection=true")
   endforeach()
 endforeach()
 
@@ -158,7 +158,8 @@ endforeach()
 
 foreach(test IN LISTS all_tests)
   target_compile_options(${test}.cilkprace.if INTERFACE -fsanitize=cilkprace)
-  target_link_options(${test}.cilkprace.if INTERFACE -fopencilk-enable-pedigrees)
+  target_link_options(${test}.cilkprace.if INTERFACE -fsanitize=cilkprace -fopencilk-enable-pedigrees)
+  target_link_libraries(${test}.cilkprace.if INTERFACE c++)
 endforeach()
 
 foreach(test IN LISTS all_tests)

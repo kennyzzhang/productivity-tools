@@ -30,9 +30,8 @@ public:
       _exit(1);
     }
     shadowmem_end = shadowmem + vmem_shadow_size;
-    // outs_red << "SHADOW MEM: " << shadowmem << std::endl;
-    outs_red << "Want mem size: " << vmem_shadow_size << " = 2^"
-             << log2(vmem_shadow_size) << std::endl;
+    // outs_red << "Want mem size: " << vmem_shadow_size << " = 2^"
+    //          << log2(vmem_shadow_size) << std::endl;
     // outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
   }
 
