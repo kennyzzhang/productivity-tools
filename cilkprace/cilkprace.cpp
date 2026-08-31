@@ -39,10 +39,17 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
 
   seqlock.begin_write();
 
+  if (__builtin_expect(last_writer.is_unraceable() && last_reader_range.is_unraceable(), 0)) {
+    last_reader_range.copy_from(reader);
+    is_range = false;
+    seqlock.end_write();
+    return false;
+  }
+
   if (!is_range && reader.is_identical(last_reader_range)) {
     read_race = identical;
   } else {
-    read_race = last_reader_range.is_empty()
+    read_race = last_reader_range.is_unraceable()
                     ? synced
                     : reader.range_relation(last_reader_range, is_range);
   }
@@ -52,7 +59,7 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
     return false;
   }
 
-  if (last_writer.is_empty() || reader.is_identical(last_writer)) {
+  if (last_writer.is_unraceable() || reader.is_identical(last_writer)) {
     write_race = synced;
   } else {
     write_race = reader.range_relation(last_writer, false);
@@ -83,10 +90,19 @@ bool shadow_label::does_write_race_slow(const os_label &writer) {
   range_check write_race;
 
   seqlock.begin_write();
-  read_race = last_reader_range.is_empty()
+
+  if (__builtin_expect(last_writer.is_unraceable() && last_reader_range.is_unraceable(), 0)) {
+    last_writer.copy_from(writer);
+    last_reader_range.copy_from(writer);
+    is_range = false;
+    seqlock.end_write();
+    return false;
+  }
+
+  read_race = last_reader_range.is_unraceable()
                   ? synced
                   : writer.range_relation(last_reader_range, is_range);
-  write_race = last_writer.is_empty()
+  write_race = last_writer.is_unraceable()
                    ? synced
                    : writer.range_relation(last_writer, false);
   if (write_race != identical) {

@@ -33,7 +33,8 @@ private:
    *
    * @param new_capacity New capacity of the call stack.
    */
-  void _resize(uint32_t new_capacity) {
+  __attribute__((always_inline))
+  inline void _resize(uint32_t new_capacity) {
     // Save a pointer to the call stack
     STACK_DATA_T *old_stack = _stack;
     // Allocate new call stack array
@@ -54,12 +55,14 @@ private:
   /*
    * Doubles the capacity of the call stack.
    */
-  void _double_cap() { _resize(_capacity * 2); }
+  __attribute__((always_inline))
+  inline void _double_cap() { _resize(_capacity * 2); }
 
   /*
    * Halves the capacity of the call stack.
    */
-  void _halve_cap() { _resize(_capacity / 2); }
+  __attribute__((always_inline))
+  inline void _halve_cap() { _resize(_capacity / 2); }
 
 
 public:

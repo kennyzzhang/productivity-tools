@@ -5,7 +5,6 @@
 #include <sys/mman.h>
 
 #include "shadowmem.h"
-#include "outs_red.h"
 
 template<typename Value, size_t Granularity>
 class shadowmem_reservevm : public shadowmem<shadowmem_reservevm<Value, Granularity>> {
@@ -64,6 +63,7 @@ public:
 
     return *shadow_addr;
   }
+
 
   template<typename Fn>
   __attribute__((always_inline))

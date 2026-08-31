@@ -10,14 +10,12 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <ostream>
 #include <unistd.h>
 #include <dlfcn.h>
 
 #include <shadowmem_reservevm.h>
 #include <shadowmem_pagetable.h>
 
-#include "outs_red.h"
 #include "stack.h"
 
 #define TRACE_CALLS 1
@@ -107,11 +105,6 @@ typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
 extern __attribute__((visibility("default"))) MAAPstack_reducer MAAPs;
 extern __attribute__((visibility("default"))) ustack_reducer MAAP_counts;
 
-__attribute__((always_inline)) /*static*/ inline bool is_execution_parallel() {
-  const os_label *lab = __cilkrts_get_current_os_label();
-  return lab ? !lab->is_serial() : false;
-}
-
 class CilkpraceImpl_t {
   shadowmem_reservevm<shadow_label, 4> shadow_mem;
 
@@ -125,7 +118,7 @@ class CilkpraceImpl_t {
 public:
   CilkpraceImpl_t() {
 #ifdef TRACE_CALLS
-    outs_red << "HAS INIT" << std::endl;
+    fprintf(stderr, "HAS INIT\n");
 #endif
     const char *env_val = getenv("CILKPRACE_IGNORE_STDLIB_RACES");
     if (env_val && strcmp(env_val, "0") == 0) {
@@ -170,12 +163,12 @@ public:
                              csi_id_t store_id,
                              const os_label& cur_lab) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
-    shadow_mem.for_each(beg, beg + num_bytes,
-      [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
-        if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
-          report_write_race(addr, store_id, cur_lab, lab);
-        }
-      });
+    auto handler = [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
+      if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
+        report_write_race(addr, store_id, cur_lab, lab);
+      }
+    };
+    shadow_mem.for_each(beg, beg + num_bytes, handler);
   }
 
   __attribute__((always_inline))
@@ -189,12 +182,12 @@ public:
                             csi_id_t load_id,
                             const os_label& cur_lab) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
-    shadow_mem.for_each(beg, beg + num_bytes,
-      [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
-        if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
-          report_read_race(addr, load_id, cur_lab, lab);
-        }
-      });
+    auto handler = [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
+      if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
+        report_read_race(addr, load_id, cur_lab, lab);
+      }
+    };
+    shadow_mem.for_each(beg, beg + num_bytes, handler);
   }
 
   __attribute__((always_inline))
@@ -221,14 +214,14 @@ public:
   }
 
   void register_free(uintptr_t addr) {
-    outs_red << "UNHANDLED FREE" << std::endl;
+    fprintf(stderr, "UNHANDLED FREE\n");
   }
 
   void advance_stack_frame(uintptr_t addr) {
-    outs_red << "UNHANDLED STACK ADVANCE" << std::endl;
+    fprintf(stderr, "UNHANDLED STACK ADVANCE\n");
   }
   void restore_stack(const csi_id_t call_id, uintptr_t addr) {
-    outs_red << "UNHANDLED STACK RESTORE" << std::endl;
+    fprintf(stderr, "UNHANDLED STACK RESTORE\n");
   }
 };
 

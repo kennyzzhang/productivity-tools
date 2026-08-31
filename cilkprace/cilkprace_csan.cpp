@@ -370,7 +370,9 @@ void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
 // outside world (including runtime).
 // Non-inlined version for user code to use
 CILKSAN_API void __cilksan_enable_checking(void) {
-  outs_red << "UNHANDLED ENABLE CHECKING" << std::endl;
+
+  fprintf(stderr, "UNHANDLED ENABLE CHECKING\n");
+
   //checking_disabled--;  
   //cilksan_assert(checking_disabled >= 0);
   //DBG_TRACE(BASIC, "External enable checking (%d).\n", checking_disabled);
@@ -378,7 +380,9 @@ CILKSAN_API void __cilksan_enable_checking(void) {
 
 // Non-inlined version for user code to use
 CILKSAN_API void __cilksan_disable_checking(void) {
-  outs_red << "UNHANDLED DISABLE CHECKING" << std::endl;
+
+  fprintf(stderr, "UNHANDLED DISABLE CHECKING\n");
+
   //cilksan_assert(checking_disabled >= 0);
   //checking_disabled++;
   //DBG_TRACE(BASIC, "External disable checking (%d).\n", checking_disabled);
