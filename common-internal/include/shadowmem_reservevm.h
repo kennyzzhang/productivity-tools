@@ -34,7 +34,6 @@ public:
     // outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;
   }
 
-  __attribute__((always_inline))
   inline Value& addr_to_shadow(uintptr_t addr) const {
 #ifdef TRACE_CALLS
     outs_red << "addr_to_shadow(" << std::hex << addr << ")" << std::endl;
@@ -66,7 +65,6 @@ public:
 
 
   template<typename Fn>
-  __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
     size_t num_bytes = end - beg;
     Value *labels = &addr_to_shadow(beg);

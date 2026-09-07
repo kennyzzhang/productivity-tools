@@ -158,12 +158,11 @@ public:
   void report_read_race(uintptr_t addr, csi_id_t load_id,
                         const os_label& cur_lab, const shadow_label& lab);
 
-  __attribute__((always_inline))
   inline void register_write(uintptr_t beg, size_t num_bytes,
                              csi_id_t store_id,
                              const os_label& cur_lab) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
-    auto handler = [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
+    auto handler = [&](uintptr_t addr, shadow_label& lab) {
       if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
         report_write_race(addr, store_id, cur_lab, lab);
       }
@@ -171,18 +170,16 @@ public:
     shadow_mem.for_each(beg, beg + num_bytes, handler);
   }
 
-  __attribute__((always_inline))
   inline void register_write(uintptr_t beg, size_t num_bytes,
                              csi_id_t store_id) {
     register_write(beg, num_bytes, store_id, *__cilkrts_get_current_os_label());
   }
 
-  __attribute__((always_inline))
   inline void register_read(uintptr_t beg, size_t num_bytes,
                             csi_id_t load_id,
                             const os_label& cur_lab) {
     if (__builtin_expect(num_bytes == 0, 0)) return;
-    auto handler = [&](uintptr_t addr, shadow_label& lab) __attribute__((always_inline)) {
+    auto handler = [&](uintptr_t addr, shadow_label& lab) {
       if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
         report_read_race(addr, load_id, cur_lab, lab);
       }
@@ -190,7 +187,6 @@ public:
     shadow_mem.for_each(beg, beg + num_bytes, handler);
   }
 
-  __attribute__((always_inline))
   inline void register_read(uintptr_t beg, size_t num_bytes,
                             csi_id_t load_id) {
     register_read(beg, num_bytes, load_id, *__cilkrts_get_current_os_label());
@@ -228,7 +224,7 @@ public:
 extern __attribute__((visibility("default"))) CilkpraceImpl_t tool_instance;
 
 // FIXME: Hardcoded for now
-__attribute__((always_inline)) /*static*/ inline bool should_check() {
+/*static*/ inline bool should_check() {
   return HAS_INIT;
 }
 

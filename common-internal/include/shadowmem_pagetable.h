@@ -80,7 +80,6 @@ public:
   }
 
   template<typename Fn>
-  __attribute__((always_inline))
   inline void for_each(uintptr_t beg, uintptr_t end, Fn&& fn) {
     uintptr_t beg_idx = base::floordivgrain(beg);
     uintptr_t end_idx = base::ceildivgrain(end);
