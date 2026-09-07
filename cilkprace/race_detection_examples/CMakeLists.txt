@@ -159,7 +159,7 @@ endforeach()
 foreach(test IN LISTS all_tests)
   target_compile_options(${test}.cilkprace.if INTERFACE -fsanitize=cilkprace)
   target_link_options(${test}.cilkprace.if INTERFACE -fsanitize=cilkprace -fopencilk-enable-pedigrees)
-  target_link_libraries(${test}.cilkprace.if INTERFACE c++)
+  target_link_libraries(${test}.cilkprace.if INTERFACE stdc++)
 endforeach()
 
 foreach(test IN LISTS all_tests)
