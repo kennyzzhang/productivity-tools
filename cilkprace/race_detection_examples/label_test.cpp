@@ -180,16 +180,17 @@ int test_multiple_syncs(std::vector<uint8_t> base) {
   return fails;
 }
 
+int scope_child(std::vector<uint8_t> base) {
+  return verify_label(append_label(base, {1}), "test_cilk_scope child");
+}
+
 int test_cilk_scope(std::vector<uint8_t> base) {
   int fails = 0;
   fails += verify_label(base, "test_cilk_scope entry");
 
   int c = 0;
   cilk_scope {
-    c = cilk_spawn[&]() {
-      return verify_label(append_label(base, {1}), "test_cilk_scope child");
-    }
-    ();
+    c = cilk_spawn scope_child(base);
     fails +=
         verify_label(append_label(base, {0}), "test_cilk_scope continuation");
   }
