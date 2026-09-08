@@ -3,6 +3,8 @@
 #ifndef _STACK_H
 #define _STACK_H
 
+#pragma GCC visibility push(default)
+
 #include <assert.h>
 #include <cstdio>
 #include <cstdlib>
@@ -157,5 +159,7 @@ public:
   }
 
 };
+
+#pragma GCC visibility pop
 
 #endif // #define _STACK_H

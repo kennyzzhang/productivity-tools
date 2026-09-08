@@ -1,5 +1,7 @@
 #pragma once
 
+#pragma GCC visibility push(default)
+
 #include <cassert>
 #include <cstdint>
 #include <sys/mman.h>
@@ -75,3 +77,5 @@ public:
     }
   }
 };
+
+#pragma GCC visibility pop

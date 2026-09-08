@@ -1,3 +1,7 @@
+#pragma once
+
+#pragma GCC visibility push(default)
+
 #include <atomic>
 #include <cassert>
 #include <cstdint>
@@ -90,3 +94,5 @@ public:
     }
   }
 };
+
+#pragma GCC visibility pop

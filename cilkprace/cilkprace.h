@@ -1,4 +1,7 @@
 #pragma once
+
+#pragma GCC visibility push(default)
+
 #include "csan.h"
 #include <cassert>
 #include <cilk/cilk.h>
@@ -43,63 +46,14 @@ using MAAPstack = Stack_t<std::pair<csi_id_t, MAAP_t>>;
 using ustack = Stack_t<unsigned>;
 using pstack = Stack_t<uint8_t>;
 
-// Stack structures for keeping track of MAAPs for pointer arguments to function
-// calls
-__attribute__((visibility("default"))) inline void init_MAAPstack(void *view) {
-#if TRACE_CALLS
-  std::cerr << "init MAAPSTACK" << std::endl;
-#endif
-  new (view) MAAPstack();
-}
-
-__attribute__((visibility("default"))) inline void reduce_MAAPstack(void *left_view, void *right_view) {
-#if TRACE_CALLS
-  std::cerr << "reduce MAAPSTACK" << std::endl;
-#endif
-  MAAPstack *left = static_cast<MAAPstack *>(left_view);
-  MAAPstack *right = static_cast<MAAPstack *>(right_view);
-  
-  int32_t net_change = static_cast<int32_t>(right->size()) - 1;
-  if (net_change < 0) {
-    for (int32_t i = 0; i < -net_change; ++i) left->pop();
-  } else if (net_change > 0) {
-    for (int32_t i = 0; i < net_change; ++i) {
-      left->push_back(right->from_back(net_change - 1 - i));
-    }
-  }
-  
-  right->~MAAPstack();
-}
-
+// Reducer functions for keeping track of MAAPs
+void init_MAAPstack(void *view);
+void reduce_MAAPstack(void *left_view, void *right_view);
 typedef MAAPstack cilk_reducer(init_MAAPstack,
                                reduce_MAAPstack) MAAPstack_reducer;
 
-__attribute__((visibility("default"))) inline void init_ustack(void *view) {
-#if TRACE_CALLS
-  std::cerr << "init ustack" << std::endl;
-#endif
-  new (view) ustack();
-}
-
-__attribute__((visibility("default"))) inline void reduce_ustack(void *left_view, void *right_view) {
-#if TRACE_CALLS
-  std::cerr << "reduce ustack" << std::endl;
-#endif
-  ustack *left = static_cast<ustack *>(left_view);
-  ustack *right = static_cast<ustack *>(right_view);
-  
-  int32_t net_change = static_cast<int32_t>(right->size()) - 1;
-  if (net_change < 0) {
-    for (int32_t i = 0; i < -net_change; ++i) left->pop();
-  } else if (net_change > 0) {
-    for (int32_t i = 0; i < net_change; ++i) {
-      left->push_back(right->from_back(net_change - 1 - i));
-    }
-  }
-  
-  right->~ustack();
-}
-
+void init_ustack(void *view);
+void reduce_ustack(void *left_view, void *right_view);
 typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
 
 extern __attribute__((visibility("default"))) MAAPstack_reducer MAAPs;
@@ -116,39 +70,11 @@ class CilkpraceImpl_t {
   bool ignore_stdlib_races;
 
 public:
-  CilkpraceImpl_t() {
-#ifdef TRACE_CALLS
-    fprintf(stderr, "HAS INIT\n");
-#endif
-    const char *env_val = getenv("CILKPRACE_IGNORE_STDLIB_RACES");
-    if (env_val && strcmp(env_val, "0") == 0) {
-      ignore_stdlib_races = false;
-    } else {
-      ignore_stdlib_races = true;
-    }
-
-    // Note that we start executing the program in series.
-    // parallel_execution.push_back(0);
-    // Push a default value of 0 onto the MAAP_counts stack, in case this
-    // function contains get_MAAP calls.
-    // MAAP_counts.push_back(0);
-    HAS_INIT = true;
-  }
-
-  ~CilkpraceImpl_t() {}
+  CilkpraceImpl_t();
+  ~CilkpraceImpl_t();
 
   __attribute__((noinline, cold, preserve_most))
-  bool is_benign_stdlib_race(uintptr_t race_addr) {
-    if (!ignore_stdlib_races) return false;
-    Dl_info info;
-    if (dladdr((void*)race_addr, &info) && info.dli_sname) {
-      if (strstr(info.dli_sname, "cout") != nullptr ||
-          strstr(info.dli_sname, "cerr") != nullptr) {
-        return true;
-      }
-    }
-    return false;
-  }
+  bool is_benign_stdlib_race(uintptr_t race_addr);
 
   __attribute__((noinline, cold, preserve_most, visibility("default")))
   void report_write_race(uintptr_t addr, csi_id_t store_id,
@@ -158,67 +84,30 @@ public:
   void report_read_race(uintptr_t addr, csi_id_t load_id,
                         const os_label& cur_lab, const shadow_label& lab);
 
-  inline void register_write(uintptr_t beg, size_t num_bytes,
-                             csi_id_t store_id,
-                             const os_label& cur_lab) {
-    if (__builtin_expect(num_bytes == 0, 0)) return;
-    auto handler = [&](uintptr_t addr, shadow_label& lab) {
-      if (__builtin_expect(lab.does_write_race(cur_lab), 0)) {
-        report_write_race(addr, store_id, cur_lab, lab);
-      }
-    };
-    shadow_mem.for_each(beg, beg + num_bytes, handler);
-  }
+  void register_write(uintptr_t beg, size_t num_bytes,
+                      csi_id_t store_id,
+                      const os_label& cur_lab);
 
-  inline void register_write(uintptr_t beg, size_t num_bytes,
-                             csi_id_t store_id) {
-    register_write(beg, num_bytes, store_id, *__cilkrts_get_current_os_label());
-  }
+  void register_write(uintptr_t beg, size_t num_bytes,
+                      csi_id_t store_id);
 
-  inline void register_read(uintptr_t beg, size_t num_bytes,
-                            csi_id_t load_id,
-                            const os_label& cur_lab) {
-    if (__builtin_expect(num_bytes == 0, 0)) return;
-    auto handler = [&](uintptr_t addr, shadow_label& lab) {
-      if (__builtin_expect(lab.does_read_race(cur_lab), 0)) {
-        report_read_race(addr, load_id, cur_lab, lab);
-      }
-    };
-    shadow_mem.for_each(beg, beg + num_bytes, handler);
-  }
+  void register_read(uintptr_t beg, size_t num_bytes,
+                     csi_id_t load_id,
+                     const os_label& cur_lab);
 
-  inline void register_read(uintptr_t beg, size_t num_bytes,
-                            csi_id_t load_id) {
-    register_read(beg, num_bytes, load_id, *__cilkrts_get_current_os_label());
-  }
+  void register_read(uintptr_t beg, size_t num_bytes,
+                     csi_id_t load_id);
 
-  void register_alloca(uintptr_t beg, size_t num_bytes) {
-    if (__builtin_expect(num_bytes == 0, 0)) return;
-    shadow_mem.for_each(beg, beg + num_bytes,
-      [&](uintptr_t addr, shadow_label& lab) {
-        memset(&lab, 0, sizeof(shadow_label));
-      });
-  }
+  void register_alloca(uintptr_t beg, size_t num_bytes);
 
-  void register_allocfn(uintptr_t addr, size_t nb) {
-    register_alloca(addr, nb);
-  }
+  void register_allocfn(uintptr_t addr, size_t nb);
 
-  void register_alloc_strdup(uintptr_t addr, const char *str) {
-    if (addr && str)
-      register_alloca(addr, strlen(str) + 1);
-  }
+  void register_alloc_strdup(uintptr_t addr, const char *str);
 
-  void register_free(uintptr_t addr) {
-    fprintf(stderr, "UNHANDLED FREE\n");
-  }
+  void register_free(uintptr_t addr);
 
-  void advance_stack_frame(uintptr_t addr) {
-    fprintf(stderr, "UNHANDLED STACK ADVANCE\n");
-  }
-  void restore_stack(const csi_id_t call_id, uintptr_t addr) {
-    fprintf(stderr, "UNHANDLED STACK RESTORE\n");
-  }
+  void advance_stack_frame(uintptr_t addr);
+  void restore_stack(const csi_id_t call_id, uintptr_t addr);
 };
 
 extern __attribute__((visibility("default"))) CilkpraceImpl_t tool_instance;
@@ -236,3 +125,5 @@ void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal, uintptr_t ptr,
                        size_t len);
 void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal, const void *ptr,
                        size_t len);
+
+#pragma GCC visibility pop
