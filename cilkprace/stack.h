@@ -17,7 +17,7 @@
  * associated with the call stack.
  */
 template <typename STACK_DATA_T>
-class Stack_t {
+class alignas(16) Stack_t {
 private:
   /* Default capacity for call stack.  Tunable to minimize
    * resizing. */
@@ -159,6 +159,11 @@ public:
   }
 
 };
+
+static_assert(sizeof(Stack_t<unsigned>) == 16, "Stack_t<unsigned> must be 16 bytes");
+static_assert(alignof(Stack_t<unsigned>) == 16, "Stack_t<unsigned> must be 16-byte aligned");
+static_assert(sizeof(Stack_t<uint8_t>) == 16, "Stack_t<uint8_t> must be 16 bytes");
+static_assert(alignof(Stack_t<uint8_t>) == 16, "Stack_t<uint8_t> must be 16-byte aligned");
 
 #pragma GCC visibility pop
 

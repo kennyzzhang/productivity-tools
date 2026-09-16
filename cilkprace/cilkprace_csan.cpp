@@ -82,7 +82,7 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
   // As we filter out reads that are about to be writes anyway
   if (prop.is_read_before_write_in_bb)
     return;
-  if (__builtin_expect(!HAS_INIT, 0)) return;
+  if (__builtin_expect(!HAS_INIT || !cur_lab, 0)) return;
   tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
 }
 
@@ -116,7 +116,7 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
   // As we filter out reads that are about to be writes anyway
   if (prop.is_read_before_write_in_bb)
     return;
-  if (__builtin_expect(!HAS_INIT, 0)) return;
+  if (__builtin_expect(!HAS_INIT || !cur_lab, 0)) return;
   tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
 }
 
@@ -132,7 +132,7 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  if (__builtin_expect(!HAS_INIT, 0)) return;
+  if (__builtin_expect(!HAS_INIT || !cur_lab, 0)) return;
   tool_instance.register_write((uint64_t)addr, num_bytes, store_id, *cur_lab);
 }
 
@@ -148,7 +148,7 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  if (__builtin_expect(!HAS_INIT, 0)) return;
+  if (__builtin_expect(!HAS_INIT || !cur_lab, 0)) return;
   tool_instance.register_write((uint64_t)addr, num_bytes, store_id, *cur_lab);
 }
 

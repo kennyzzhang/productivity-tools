@@ -41,6 +41,7 @@ enum class MAAP_t : uint8_t {
   ModRef = Mod | Ref,
   NoAlias = 4,
 };
+static_assert(sizeof(MAAP_t) == 1, "MAAP_t must be 1 byte");
 
 using MAAPstack = Stack_t<std::pair<csi_id_t, MAAP_t>>;
 using ustack = Stack_t<unsigned>;
