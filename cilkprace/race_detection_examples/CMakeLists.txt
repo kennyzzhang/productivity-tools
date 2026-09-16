@@ -148,7 +148,7 @@ endforeach()
 
 foreach(test IN LISTS all_tests)
   foreach(variant IN LISTS all_race_detectors)
-    target_compile_options(${test}.${variant}.if INTERFACE "SHELL:-mllvm -enable-static-race-detection=true")
+    target_compile_options(${test}.${variant}.if INTERFACE "SHELL:-mllvm -enable-static-race-detection=false")
   endforeach()
 endforeach()
 
