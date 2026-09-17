@@ -59,6 +59,7 @@ cmake                                                                          \
   -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g "                                     \
   -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"                                    \
   -DDISABLED_TESTS="fibred;heat;fft;blah;conditional_sync;funny_malloc;heap_reuse;label_test;loop;memcpy_race;missed_race;nqueens_racy;single_spawn_norace;single_spawn_race;single_spawn_rr_norace;single_spawn_rw_race;stack_reuse;strdup" \
+  -DDISABLED_TESTS="fibred;heat;fft;blah"                                      \
   "$SOURCE_DIR"                                                                \
 ;
 
