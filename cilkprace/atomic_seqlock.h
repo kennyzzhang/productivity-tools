@@ -21,6 +21,14 @@ class atomic_seqlock {
   // We store a has_writer boolean in the low-order bit
   std::atomic<uint32_t> seq{0};
 
+  class write_lock_t {
+  public:
+    atomic_seqlock& seqlock;
+    write_lock_t(atomic_seqlock& seqlock) : seqlock(seqlock) {};
+    void lock() { seqlock.begin_write(); }
+    void unlock() { seqlock.end_write(); }
+  };
+
 public:
   void begin_write() {
       while (true) {
@@ -45,6 +53,10 @@ public:
       // Our write is visibile to us-- we can just load-increment weakly
       seq.store(seq.load(std::memory_order_relaxed) + 1, std::memory_order_release);
   }
+
+  write_lock_t write_lock() {
+    return *this;
+  };
 
   __attribute__((always_inline))
   uint32_t begin_read() {

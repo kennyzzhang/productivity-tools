@@ -1,4 +1,5 @@
 #include "cilkprace.h"
+#include <mutex>
 
 __attribute__((visibility("default"))) CilkpraceImpl_t tool_instance;
 
@@ -34,6 +35,9 @@ void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
 
 __attribute__((visibility("default")))
 bool shadow_label::does_read_race(const os_label &reader) {
+  auto write_lock = seqlock.write_lock();
+  std::lock_guard<decltype(write_lock)> lock(write_lock);
+
   unsigned lca_depth = active_reader.lca(reader);
   if (lca_depth < write_depth) {
     write_depth = lca_depth;
@@ -43,7 +47,7 @@ bool shadow_label::does_read_race(const os_label &reader) {
   }
   if (lca_depth % 4 != 3) {
     active_reader = reader;
-  } else {
+  } else if (lca_depth < active_reader.end_idx) {
     // Technically unnecessary for one-worker execution, but could help
     // prune later lca calls
     active_reader.end_idx = lca_depth;
@@ -53,6 +57,9 @@ bool shadow_label::does_read_race(const os_label &reader) {
 
 __attribute__((visibility("default")))
 bool shadow_label::does_write_race(const os_label &writer) {
+  auto write_lock = seqlock.write_lock();
+  std::lock_guard<decltype(write_lock)> lock(write_lock);
+
   unsigned lca_depth = active_reader.lca(writer);
   if (lca_depth < write_depth) {
     write_depth = lca_depth;
