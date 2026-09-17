@@ -22,6 +22,7 @@ set(all_tests_c
 set(all_tests_cpp
   label_test
   qsort
+  single_spawn_rr_norace
 )
 
 # Tests excluded from the time target (sources exist but not in all_tests_cpp):
