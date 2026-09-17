@@ -35,6 +35,18 @@ void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
 
 __attribute__((visibility("default")))
 bool shadow_label::does_read_race(const os_label &reader) {
+  bool no_updates;
+  uint32_t seq;
+
+  do {
+    seq = seqlock.begin_read();
+
+    unsigned lca_depth = active_reader.lca(reader);
+    no_updates = lca_depth % 4 == 3 && lca_depth >= active_reader.end_idx;
+  } while (!seqlock.read_was_safe(seq));
+
+  if (no_updates) return false;
+
   auto write_lock = seqlock.write_lock();
   std::lock_guard<decltype(write_lock)> lock(write_lock);
 
