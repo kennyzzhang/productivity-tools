@@ -20,30 +20,24 @@ set(all_tests_c
 )
 
 set(all_tests_cpp
+  blah
+  conditional_sync
+  fibred
+  funny_malloc
+  heap_reuse
+  label_test
+  loop
+  memcpy_race
+  missed_race
+  nqueens_racy
   qsort
+  single_spawn_norace
+  single_spawn_race
+  single_spawn_rr_norace
+  single_spawn_rw_race
+  stack_reuse
+  strdup
 )
-
-# Tests excluded from the time target (sources exist but not in all_tests_cpp):
-#
-# Micro / correctness-only tests (run in <0.01s, not meaningful benchmarks):
-#   blah                 - dev scratchpad; intentional races, no -i flag support
-#   conditional_sync     - micro correctness test
-#   funny_malloc         - micro correctness test
-#   heap_reuse           - micro correctness test
-#   loop                 - micro correctness test
-#   memcpy_race          - micro correctness test
-#   missed_race          - micro correctness test
-#   single_spawn_norace  - micro correctness test
-#   single_spawn_rr_norace - micro correctness test
-#   single_spawn_race    - intentionally racy
-#   single_spawn_rw_race - intentionally racy
-#   stack_reuse          - micro correctness test
-#   strdup               - micro correctness test
-#
-# Build / correctness failures:
-#   fibred        - uses cilk::opadd_reducer which currently fails to build
-#   label_test    - exits 1 under cilkprace with -i 5 (OS label determinism test failure)
-#   nqueens_racy  - intentionally racy program; exits 1 with cilkprace
 
 set(all_tests ${all_tests_c} ${all_tests_cpp})
 
@@ -55,7 +49,7 @@ set(all_variants
   cilkprace
 )
 
-set(all_needs_getoptions cholesky cilksort fft fib heat lu matmul nqueens qsort rectmul rectmulred strassen)
+set(all_needs_getoptions cholesky cilksort fft fib fibred heat lu matmul nqueens qsort rectmul rectmulred strassen)
 set(all_needs_lm cholesky fft heat)
 set(all_has_cilk notool cilksan cilkpiston cilkprace)
 set(all_race_detectors cilksan cilkpiston cilkprace)
