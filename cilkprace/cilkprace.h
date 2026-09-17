@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
-#include <cilk/os_label.h>
 #include <cmath>
 #include <csi/csi.h>
 #include <cstddef>
@@ -17,6 +16,7 @@
 #include <shadowmem_pagetable.h>
 
 #include "stack.h"
+#include "shadow_label.h"
 
 #define TRACE_CALLS 1
 #undef TRACE_CALLS
