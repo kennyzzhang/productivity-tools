@@ -35,7 +35,7 @@ void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
 __attribute__((visibility("default")))
 bool shadow_label::does_read_race(const os_label &reader) {
     unsigned lca_depth = active_reader.lca(reader);
-    if (lca_depth > write_depth) {
+    if (lca_depth < write_depth) {
         write_depth = lca_depth;
     }
     if (write_depth % 4 == 3) {
@@ -54,7 +54,7 @@ bool shadow_label::does_read_race(const os_label &reader) {
 __attribute__((visibility("default")))
 bool shadow_label::does_write_race(const os_label &writer) {
     unsigned lca_depth = active_reader.lca(writer);
-    if (lca_depth > write_depth) {
+    if (lca_depth < write_depth) {
         write_depth = lca_depth;
     }
     if (write_depth % 4 == 3) {
