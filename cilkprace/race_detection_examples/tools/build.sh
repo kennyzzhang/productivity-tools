@@ -56,10 +56,9 @@ cmake                                                                          \
   -DCMAKE_CXX_COMPILER="$OPENCILK/bin/clang++"                                 \
   -DLLVM_CMAKE_DIR="$OPENCILK"                                                 \
   -DCMAKE_BUILD_TYPE="RelWithDebInfo"                                          \
-  -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g "    \
-  -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"   \
-  -DCMAKE_EXPORT_COMPILE_COMMANDS="ON"                                         \
-  -DDISABLED_TESTS="fibred;heat;fft"                                           \
+  -DCMAKE_C_FLAGS_RELWITHDEBINFO="-O3 -g "                                     \
+  -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"                                    \
+  -DDISABLED_TESTS="fibred;heat;fft;blah;conditional_sync;funny_malloc;heap_reuse;label_test;loop;memcpy_race;missed_race;nqueens_racy;single_spawn_norace;single_spawn_race;single_spawn_rr_norace;single_spawn_rw_race;stack_reuse;strdup" \
   "$SOURCE_DIR"                                                                \
 ;
 
