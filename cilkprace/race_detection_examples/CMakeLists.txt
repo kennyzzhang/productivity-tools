@@ -20,6 +20,7 @@ set(all_tests_c
 )
 
 set(all_tests_cpp
+  label_test
   qsort
 )
 
