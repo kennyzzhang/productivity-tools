@@ -36,16 +36,12 @@ _TIME_RE = re.compile(r"(?P<metric>real|user|sys)\s+(?P<min>\d+)m(?P<sec>[\d.]+)
 VARIANT_COLORS = {
     "nocilk":    "#4c7bba",
     "notool":    "#6aad6a",
-    "cilksan":   "#e07c39",
-    "cilkpiston":"#9b6bbf",
     "cilkprace": "#c94040",
 }
 
 VARIANT_LABELS = {
     "nocilk":    "No Cilk (serial)",
-    "notool":    "No tool",
-    "cilksan":   "Cilksan",
-    "cilkpiston":"Cilkpiston",
+    "notool":    "Cilk (no tool)",
     "cilkprace": "Cilkprace",
 }
 
@@ -219,7 +215,7 @@ def main():
     elif not args.all:
         results = {t: v for t, v in results.items() if t not in DEFAULT_SKIP_TESTS}
 
-    canonical = ["nocilk", "notool", "cilksan", "cilkpiston", "cilkprace"]
+    canonical = ["notool", "cilkprace"]
     found_variants = {v for d in results.values() for v in d}
     if args.variants:
         variants = [v for v in args.variants.split(",") if v in found_variants]
