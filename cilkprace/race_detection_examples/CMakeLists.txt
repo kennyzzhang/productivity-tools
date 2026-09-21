@@ -344,6 +344,25 @@ foreach(test IN LISTS tests)
   endforeach()
 endforeach()
 
+# Save-impl targets: copy *.cilkprace.time -> *.cilkprace-{single,range}.time
+# so both implementations can be plotted side-by-side.
+# Usage:
+#   cmake -DCILKPRACE_LABEL_IMPL=leb8-single ... && make time && make save-single
+#   cmake -DCILKPRACE_LABEL_IMPL=leb8-range  ... && make time && make save-range
 
+foreach(impl IN ITEMS single range)
+  set(copy_commands)
+  foreach(test IN LISTS tests)
+    set(src "${CMAKE_CURRENT_BINARY_DIR}/${test}.cilkprace.time")
+    set(dst "${CMAKE_CURRENT_BINARY_DIR}/${test}.cilkprace-${impl}.time")
+    list(APPEND copy_commands
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${src}" "${dst}"
+    )
+  endforeach()
 
-
+  add_custom_target(save-${impl}
+    ${copy_commands}
+    COMMENT "Saving cilkprace timing as cilkprace-${impl}"
+    VERBATIM
+  )
+endforeach()

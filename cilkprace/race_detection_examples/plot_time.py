@@ -34,15 +34,19 @@ except ImportError:
 _TIME_RE = re.compile(r"(?P<metric>real|user|sys)\s+(?P<min>\d+)m(?P<sec>[\d.]+)s")
 
 VARIANT_COLORS = {
-    "nocilk":    "#4c7bba",
-    "notool":    "#6aad6a",
-    "cilkprace": "#c94040",
+    "nocilk":         "#4c7bba",
+    "notool":         "#6aad6a",
+    "cilkprace":      "#c94040",
+    "cilkprace-single": "#e07c39",
+    "cilkprace-range":  "#9b6bbf",
 }
 
 VARIANT_LABELS = {
-    "nocilk":    "No Cilk (serial)",
-    "notool":    "Cilk (no tool)",
-    "cilkprace": "Cilkprace",
+    "nocilk":         "No Cilk (serial)",
+    "notool":         "Cilk (no tool)",
+    "cilkprace":      "Cilkprace",
+    "cilkprace-single": "Cilkprace (leb8-single)",
+    "cilkprace-range":  "Cilkprace (leb8-range)",
 }
 
 # Micro/correctness-only tests excluded from the default view.
@@ -215,13 +219,12 @@ def main():
     elif not args.all:
         results = {t: v for t, v in results.items() if t not in DEFAULT_SKIP_TESTS}
 
-    canonical = ["notool", "cilkprace"]
+    canonical = ["notool", "cilkprace-single", "cilkprace-range"]
     found_variants = {v for d in results.values() for v in d}
     if args.variants:
         variants = [v for v in args.variants.split(",") if v in found_variants]
     else:
         variants = [v for v in canonical if v in found_variants]
-        variants += sorted(found_variants - set(canonical))
 
     print_table(results, args.metric, variants)
     if not args.no_plot:
