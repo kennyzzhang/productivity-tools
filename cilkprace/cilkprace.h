@@ -7,6 +7,7 @@
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
 #include <cilk/os_label.h>
+#include "shadow_label.h"
 #include <cmath>
 #include <csi/csi.h>
 #include <cstddef>
@@ -74,14 +75,11 @@ public:
   CilkpraceImpl_t();
   ~CilkpraceImpl_t();
 
-  __attribute__((noinline, cold, preserve_most))
   bool is_benign_stdlib_race(uintptr_t race_addr);
 
-  __attribute__((noinline, cold, preserve_most, visibility("default")))
   void report_write_race(uintptr_t addr, csi_id_t store_id,
                          const os_label& cur_lab, const shadow_label& lab);
 
-  __attribute__((noinline, cold, preserve_most, visibility("default")))
   void report_read_race(uintptr_t addr, csi_id_t load_id,
                         const os_label& cur_lab, const shadow_label& lab);
 

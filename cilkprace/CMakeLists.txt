@@ -1,7 +1,21 @@
-# Build for the Cilkprace runtime support library.
+# Shadow label implementation for cilkprace (leb8-single, leb8-range, or string)
+set(CILKPRACE_LABEL_IMPL "leb8-single" CACHE STRING "Shadow label implementation for cilkprace (leb8-single, leb8-range, or string)")
+set_property(CACHE CILKPRACE_LABEL_IMPL PROPERTY STRINGS "leb8-single" "leb8-range" "string")
+
+if (CILKPRACE_LABEL_IMPL STREQUAL "leb8-range")
+  set(CILKPRACE_LABEL_SRC leb8-range.cpp)
+  set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_RANGE=1")
+elseif (CILKPRACE_LABEL_IMPL STREQUAL "string")
+  set(CILKPRACE_LABEL_SRC string-label.cpp)
+  set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_STRING=1")
+else()
+  set(CILKPRACE_LABEL_SRC leb8-single.cpp)
+  set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_SINGLE=1")
+endif()
 
 set(CILKPRACE_SOURCES
   cilkprace.cpp
+  ${CILKPRACE_LABEL_SRC}
   cilkprace_csi.cpp
   csirt.cpp
   cilkprace_csan.cpp
@@ -13,6 +27,7 @@ set(CILKPRACE_SOURCES
 
 set(CILKPRACE_BITCODE_SOURCE
   cilkprace.cpp
+  ${CILKPRACE_LABEL_SRC}
   cilkprace_csi.cpp
   cilkprace_csan.cpp
   libhooks.cpp
@@ -31,6 +46,7 @@ append_list_if(CILKTOOLS_HAS_FDEBUG_DEFAULT_VERSION_EQ_4_FLAG
 append_rtti_flag(OFF CILKPRACE_CFLAGS)
 
 set(CILKPRACE_COMMON_DEFINITIONS)
+list(APPEND CILKPRACE_COMMON_DEFINITIONS ${CILKPRACE_LABEL_DEF})
 append_list_if(CILKTOOLS_HAS_CILK SERIAL_TOOL=0 CILKPRACE_COMMON_DEFINITIONS)
 
 set(CILKPRACE_DYNAMIC_LINK_FLAGS)

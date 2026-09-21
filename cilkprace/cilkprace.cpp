@@ -1,4 +1,7 @@
 #include "cilkprace.h"
+#include <mutex>
+
+#pragma GCC visibility push(default)
 
 CilkpraceImpl_t::CilkpraceImpl_t() {
 #ifdef TRACE_CALLS
@@ -27,13 +30,12 @@ bool CilkpraceImpl_t::is_benign_stdlib_race(uintptr_t race_addr) {
   return false;
 }
 
-__attribute__((visibility("default"))) CilkpraceImpl_t tool_instance;
+CilkpraceImpl_t tool_instance;
 
-__attribute__((noinline, cold, preserve_most, visibility("default")))
 void CilkpraceImpl_t::report_write_race(uintptr_t addr, csi_id_t store_id,
                                         const os_label& cur_lab, const shadow_label& lab) {
   if (ignore_stdlib_races && is_benign_stdlib_race(addr)) return;
-  auto store = __csi_get_store_source_loc(store_id);
+  auto store = __csan_get_store_source_loc(store_id);
   fprintf(stderr, "WRITE RACE ON BYTE %lx (+%zu), return_addr=%p\n",
           (unsigned long)addr, shadow_mem.vmem_shadow_granularity,
           __builtin_return_address(0));
@@ -45,7 +47,6 @@ void CilkpraceImpl_t::report_write_race(uintptr_t addr, csi_id_t store_id,
   _exit(EXIT_FAILURE);
 }
 
-__attribute__((noinline, cold, preserve_most, visibility("default")))
 void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
                                        const os_label& cur_lab, const shadow_label& lab) {
   if (ignore_stdlib_races && is_benign_stdlib_race(addr)) return;
@@ -57,129 +58,6 @@ void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
             store->line_number, store->column_number);
   fprintf(stderr, "======================\n");
   _exit(EXIT_FAILURE);
-}
-
-__attribute__((noinline, cold, preserve_most, visibility("default")))
-bool shadow_label::does_read_race_slow(const os_label &reader) {
-  range_check read_race;
-  range_check write_race;
-
-  seqlock.begin_write();
-
-  if (__builtin_expect(last_writer.is_unraceable() && last_reader_range.is_unraceable(), 0)) {
-    last_reader_range.copy_from(reader);
-    is_range = false;
-    seqlock.end_write();
-    return false;
-  }
-
-  if (!is_range && reader.is_identical(last_reader_range)) {
-    read_race = identical;
-  } else {
-    read_race = last_reader_range.is_unraceable()
-                    ? synced
-                    : reader.range_relation(last_reader_range, is_range);
-  }
-
-  if (read_race == within || read_race == identical) {
-    seqlock.end_write();
-    return false;
-  }
-
-  if (last_writer.is_unraceable() || reader.is_identical(last_writer)) {
-    write_race = synced;
-  } else {
-    write_race = reader.range_relation(last_writer, false);
-  }
-
-  switch (read_race) {
-  case synced:
-    last_reader_range.copy_from(reader);
-    is_range = false;
-    break;
-  case parallel:
-    is_range = true;
-    reader.expand_parallel_range(last_reader_range);
-    break;
-  default:
-    break;
-  }
-
-  // Do not clear last_writer here to prevent read/write fastpath ping-pong.
-  seqlock.end_write();
-
-  return write_race == parallel || write_race == within;
-}
-
-__attribute__((noinline, cold, preserve_most, visibility("default")))
-bool shadow_label::does_write_race_slow(const os_label &writer) {
-  range_check read_race;
-  range_check write_race;
-
-  seqlock.begin_write();
-
-  if (__builtin_expect(last_writer.is_unraceable() && last_reader_range.is_unraceable(), 0)) {
-    last_writer.copy_from(writer);
-    last_reader_range.copy_from(writer);
-    is_range = false;
-    seqlock.end_write();
-    return false;
-  }
-
-  read_race = last_reader_range.is_unraceable()
-                  ? synced
-                  : writer.range_relation(last_reader_range, is_range);
-  write_race = last_writer.is_unraceable()
-                   ? synced
-                   : writer.range_relation(last_writer, false);
-  if (write_race != identical) {
-    last_writer.copy_from(writer);
-  }
-  if (read_race == synced) {
-    last_reader_range.copy_from(writer);
-    is_range = false;
-  }
-  seqlock.end_write();
-
-  return (read_race == parallel || read_race == within) ||
-         (write_race == parallel || write_race == within);
-}
-
-bool shadow_label::does_read_race(const os_label &reader) {
-  uint32_t seq;
-  bool is_same_reader = false;
-
-  do {
-    seq = seqlock.begin_read();
-    if (__builtin_expect(!is_range, 1)) {
-      is_same_reader = reader.is_identical(last_reader_range);
-    } else {
-      range_check rel = reader.range_relation(last_reader_range, true);
-      is_same_reader = (rel == within || rel == identical);
-    }
-  } while (!seqlock.read_was_safe(seq));
-
-  if (__builtin_expect(is_same_reader, 1)) {
-    return false;
-  }
-
-  return does_read_race_slow(reader);
-}
-
-bool shadow_label::does_write_race(const os_label &writer) {
-  uint32_t seq;
-  bool is_same_writer = false;
-
-  do {
-    seq = seqlock.begin_read();
-    is_same_writer = writer.is_identical(last_writer);
-  } while (!seqlock.read_was_safe(seq));
-
-  if (__builtin_expect(is_same_writer, 1)) {
-    return false;
-  }
-
-  return does_write_race_slow(writer);
 }
 
 void CilkpraceImpl_t::register_write(uintptr_t beg, size_t num_bytes,
@@ -303,10 +181,8 @@ void reduce_ustack(void *left_view, void *right_view) {
   right->~ustack();
 }
 
-template class __attribute__((visibility("default"))) Stack_t<std::pair<csi_id_t, MAAP_t>>;
-template class __attribute__((visibility("default"))) Stack_t<unsigned>;
-template class __attribute__((visibility("default"))) Stack_t<uint8_t>;
+template class Stack_t<std::pair<csi_id_t, MAAP_t>>;
+template class Stack_t<unsigned>;
+template class Stack_t<uint8_t>;
 
-
-
-
+#pragma GCC visibility pop
