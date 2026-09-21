@@ -59,6 +59,7 @@ DEFAULT_SKIP_TESTS = {
     "loop",
     "memcpy_race",
     "missed_race",
+    "nqueens_racy",
     "single_spawn_norace",
     "single_spawn_rr_norace",
     "single_spawn_race",
