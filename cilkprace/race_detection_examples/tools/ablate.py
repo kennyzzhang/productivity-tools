@@ -29,6 +29,7 @@ from pathlib import Path
 # Every knob in cilkprace_ablation.h. "off" means the optimization is removed.
 KNOBS = [
     "READ_WIDEN_FASTPATH",
+    "READ_SLOW_IDENTICAL",
     "WRITE_FASTPATH",
     "SEQLOCK",
     "CACHE_ALIGN",

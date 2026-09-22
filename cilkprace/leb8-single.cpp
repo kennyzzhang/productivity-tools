@@ -38,8 +38,14 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
   // Contended read or non-identical: check parallel ancestor or retry before write lock.
   uint32_t seq;
   bool no_race = false;
+  // Everything read in here is speculative until read_was_safe() confirms no
+  // writer intervened, so this loop only computes `no_race` -- it must not
+  // return or break out early, or a torn read of active_reader/write_depth
+  // could suppress a real race.
   do {
     seq = seqlock.begin_read();
+    no_race = false;
+#if CILKPRACE_ABL_READ_SLOW_IDENTICAL
     // Identical to the last reader is only safe when write_depth also says
     // nothing parallel has written: the write_depth branch's does_read_race
     // reaches `if (write_depth % 4 == 3) return true;` even for an identical
@@ -50,14 +56,11 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
                          write_depth <= active_reader.end_idx &&
                          write_depth % 4 != 3)) {
       no_race = true;
-      break;
     }
-    if ((active_reader.end_idx % 4 == 3) && (write_depth <= active_reader.end_idx)) {
-      unsigned lca_depth = active_reader.lca(reader);
-      if (lca_depth >= active_reader.end_idx) {
-        no_race = true;
-        break;
-      }
+#endif
+    if (!no_race && (active_reader.end_idx % 4 == 3) &&
+        (write_depth <= active_reader.end_idx)) {
+      no_race = active_reader.lca(reader) >= active_reader.end_idx;
     }
   } while (CILKPRACE_UNLIKELY(!seqlock.read_was_safe(seq)));
 
