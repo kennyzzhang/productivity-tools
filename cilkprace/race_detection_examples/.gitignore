@@ -1,5 +1,6 @@
 build
 build-ablate
+build-compare
 ablation-results
 
 *.out
