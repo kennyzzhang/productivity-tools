@@ -40,7 +40,15 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
   bool no_race = false;
   do {
     seq = seqlock.begin_read();
-    if (CILKPRACE_LIKELY(active_reader.is_identical(reader))) {
+    // Identical to the last reader is only safe when write_depth also says
+    // nothing parallel has written: the write_depth branch's does_read_race
+    // reaches `if (write_depth % 4 == 3) return true;` even for an identical
+    // reader, so short-circuiting on is_identical alone drops read-write races.
+    // Restrict the short-circuit to the case where the locked path provably
+    // makes no state change and reports nothing.
+    if (CILKPRACE_LIKELY(active_reader.is_identical(reader) &&
+                         write_depth <= active_reader.end_idx &&
+                         write_depth % 4 != 3)) {
       no_race = true;
       break;
     }
