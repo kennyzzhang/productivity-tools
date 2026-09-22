@@ -1,4 +1,6 @@
 build
+build-ablate
+ablation-results
 
 *.out
 *.san

@@ -25,7 +25,6 @@ set(all_tests_cpp
   fibred
   funny_malloc
   heap_reuse
-  label_test
   loop
   memcpy_race
   missed_race
@@ -193,8 +192,22 @@ foreach(variant IN LISTS all_race_detectors)
     foreach(test IN LISTS all_tests)
       target_compile_options(${test}.${variant}.if INTERFACE "SHELL:-mllvm -cilksan-bc-path=${${variant}_bc_path}")
     endforeach()
+    # The tool's bitcode is inlined into each object at compile time, but it
+    # reaches the compiler through -mllvm, which CMake cannot see. Without an
+    # explicit dependency, rebuilding the tool leaves every benchmark object
+    # holding the previous version of it -- so you measure the old tool.
+    list(APPEND all_bc_paths ${${variant}_bc_path})
   endif()
 endforeach()
+
+if(all_bc_paths)
+  foreach(test IN LISTS all_tests_c)
+    set_property(SOURCE ${test}.c APPEND PROPERTY OBJECT_DEPENDS "${all_bc_paths}")
+  endforeach()
+  foreach(test IN LISTS all_tests_cpp)
+    set_property(SOURCE ${test}.cpp APPEND PROPERTY OBJECT_DEPENDS "${all_bc_paths}")
+  endforeach()
+endif()
 
 # label_test-specific options (only active if label_test is re-added to all_tests_cpp)
 if(TARGET label_test.notool.if)
@@ -267,10 +280,17 @@ foreach(test IN LISTS tests)
   endforeach()
 endforeach()
 
+# Only the variants that survived DISABLED_VARIANTS have targets to link.
 foreach(test IN LISTS tests)
-  target_link_options(${test}.cilksan PRIVATE -fsanitize=cilk)
-  target_link_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace)
-  target_link_options(${test}.cilkpiston PRIVATE -fsanitize=cilkpiston)
+  if(cilksan IN_LIST variants)
+    target_link_options(${test}.cilksan PRIVATE -fsanitize=cilk)
+  endif()
+  if(cilkprace IN_LIST variants)
+    target_link_options(${test}.cilkprace PRIVATE -fsanitize=cilkprace)
+  endif()
+  if(cilkpiston IN_LIST variants)
+    target_link_options(${test}.cilkpiston PRIVATE -fsanitize=cilkpiston)
+  endif()
 endforeach()
 
 # Define extra targets

@@ -54,6 +54,7 @@ VARIANT_LABELS = {
 DEFAULT_SKIP_TESTS = {
     "blah",
     "conditional_sync",
+    "fft",
     "funny_malloc",
     "heap_reuse",
     "loop",

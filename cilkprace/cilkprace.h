@@ -6,6 +6,7 @@
 #include <cassert>
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
+#include <cilk/cilkprace_ablation.h>
 #include <cilk/os_label.h>
 #include "shadow_label.h"
 #include <cmath>
@@ -61,8 +62,12 @@ typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
 extern __attribute__((visibility("default"))) MAAPstack_reducer MAAPs;
 extern __attribute__((visibility("default"))) ustack_reducer MAAP_counts;
 
+#ifndef CILKPRACE_GRANULARITY
+#define CILKPRACE_GRANULARITY 8
+#endif
+
 class CilkpraceImpl_t {
-  shadowmem_reservevm<shadow_label, 4> shadow_mem;
+  shadowmem_reservevm<shadow_label, CILKPRACE_GRANULARITY> shadow_mem;
 
 // Assuming shadow_label is 2^10 bytes, pointers are 2^3 bytes,
 // and virtual addresses are 48 bits.
@@ -82,6 +87,7 @@ public:
 
   void report_read_race(uintptr_t addr, csi_id_t load_id,
                         const os_label& cur_lab, const shadow_label& lab);
+
 
   void register_write(uintptr_t beg, size_t num_bytes,
                       csi_id_t store_id,

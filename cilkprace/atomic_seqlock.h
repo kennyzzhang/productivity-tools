@@ -3,11 +3,17 @@
 
 #pragma GCC visibility push(default)
 
+#include <cilk/cilkprace_ablation.h>
+
 #include <atomic>
 #include <cstdint>
 #include <sched.h>
 
-#if (defined(SERIAL_TOOL) && SERIAL_TOOL) || defined(SERIAL) || defined(CILK_SERIAL)
+// !CILKPRACE_ABL_SEQLOCK selects the no-op seqlock below to measure what
+// synchronization costs. That is only sound with a single worker; see
+// cilkprace_ablation.h.
+#if (defined(SERIAL_TOOL) && SERIAL_TOOL) || defined(SERIAL) ||                \
+    defined(CILK_SERIAL) || !CILKPRACE_ABL_SEQLOCK
 
 class atomic_seqlock {
   class write_lock_t {
@@ -19,11 +25,11 @@ class atomic_seqlock {
   };
 
 public:
-  __attribute__((always_inline)) void begin_write() {}
-  __attribute__((always_inline)) void end_write() {}
-  __attribute__((always_inline)) uint32_t begin_read() { return 0; }
-  __attribute__((always_inline)) bool read_was_safe(uint32_t old_seq) const { return true; }
-  write_lock_t write_lock() { return *this; }
+  inline void begin_write() {}
+  inline void end_write() {}
+  inline uint32_t begin_read() { return 0; }
+  inline bool read_was_safe(uint32_t old_seq) const { return true; }
+  inline write_lock_t write_lock() { return *this; }
 };
 
 #else
@@ -41,7 +47,7 @@ class atomic_seqlock {
   };
 
 public:
-  void begin_write() {
+  inline void begin_write() {
       while (true) {
           uint32_t s = seq.load(std::memory_order_relaxed);
           if ((s & 1) == 0) { // no writer
@@ -60,18 +66,16 @@ public:
       }
   }
 
-  void end_write() {
+  inline void end_write() {
       // Our write is visible to us-- we can just load-increment weakly
       seq.store(seq.load(std::memory_order_relaxed) + 1, std::memory_order_release);
   }
 
-  write_lock_t write_lock() {
+  inline write_lock_t write_lock() {
     return *this;
   }
 
-  __attribute__((always_inline))
-  uint32_t begin_read() {
-      // This is a weak operation; so, we can read with just atomicity
+  inline uint32_t begin_read() {
       uint32_t ret = seq.load(std::memory_order_relaxed);
       while (__builtin_expect(ret & 1, 0)) {
           #if defined(__aarch64__)
@@ -81,17 +85,11 @@ public:
           #endif
           ret = seq.load(std::memory_order_relaxed);
       }
-      // and declare that we've acquired a resource (barrier)
-      std::atomic_thread_fence(std::memory_order_acquire);
       return ret;
   }
 
-  __attribute__((always_inline))
-  bool read_was_safe(uint32_t old_seq) const {
-      // Use a fence to ensure we get updated info
-      std::atomic_thread_fence(std::memory_order_acquire);
-      // Relaxed is fine here-- if it was fine at the fence, then it's fine here.
-      return seq.load(std::memory_order_relaxed) == old_seq;
+  inline bool read_was_safe(uint32_t old_seq) const {
+      return seq.load(std::memory_order_acquire) == old_seq;
   }
 };
 

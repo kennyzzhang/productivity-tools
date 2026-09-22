@@ -63,13 +63,15 @@ void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
 void CilkpraceImpl_t::register_write(uintptr_t beg, size_t num_bytes,
                                      csi_id_t store_id,
                                      const os_label& cur_lab) {
-  if (__builtin_expect(num_bytes == 0, 0)) return;
+  if (CILKPRACE_UNLIKELY(num_bytes == 0)) return;
   size_t gran = shadow_mem.vmem_shadow_granularity;
   size_t num_granules = (num_bytes + gran - 1) / gran;
   shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+#if CILKPRACE_ABL_GRANULE_UNROLL
   #pragma unroll 2
+#endif
   for (size_t i = 0; i < num_granules; ++i) {
-    if (__builtin_expect(labels[i].does_write_race(cur_lab), 0)) {
+    if (CILKPRACE_UNLIKELY(labels[i].does_write_race(cur_lab))) {
       report_write_race(beg + i * gran, store_id, cur_lab, labels[i]);
     }
   }
@@ -83,13 +85,15 @@ void CilkpraceImpl_t::register_write(uintptr_t beg, size_t num_bytes,
 void CilkpraceImpl_t::register_read(uintptr_t beg, size_t num_bytes,
                                     csi_id_t load_id,
                                     const os_label& cur_lab) {
-  if (__builtin_expect(num_bytes == 0, 0)) return;
+  if (CILKPRACE_UNLIKELY(num_bytes == 0)) return;
   size_t gran = shadow_mem.vmem_shadow_granularity;
   size_t num_granules = (num_bytes + gran - 1) / gran;
   shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+#if CILKPRACE_ABL_GRANULE_UNROLL
   #pragma unroll 2
+#endif
   for (size_t i = 0; i < num_granules; ++i) {
-    if (__builtin_expect(labels[i].does_read_race(cur_lab), 0)) {
+    if (CILKPRACE_UNLIKELY(labels[i].does_read_race(cur_lab))) {
       report_read_race(beg + i * gran, load_id, cur_lab, labels[i]);
     }
   }
@@ -101,9 +105,11 @@ void CilkpraceImpl_t::register_read(uintptr_t beg, size_t num_bytes,
 }
 
 void CilkpraceImpl_t::register_alloca(uintptr_t beg, size_t num_bytes) {
-  if (__builtin_expect(num_bytes == 0, 0)) return;
+  if (num_bytes == 0) return;
   size_t gran = shadow_mem.vmem_shadow_granularity;
-  size_t num_granules = (num_bytes + gran - 1) / gran;
+  size_t start_gran = beg / gran;
+  size_t end_gran = (beg + num_bytes - 1) / gran;
+  size_t num_granules = end_gran - start_gran + 1;
   shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
   memset(labels, 0, num_granules * sizeof(shadow_label));
 }
