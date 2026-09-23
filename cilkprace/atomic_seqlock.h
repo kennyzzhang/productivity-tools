@@ -47,11 +47,24 @@ class atomic_seqlock {
   };
 
 public:
+  // Memory ordering follows Boehm, "Can Seqlocks Get Along With Programming
+  // Language Memory Models?" (MSPC 2012). On a weakly ordered CPU such as Apple
+  // Silicon each fence below is load-bearing:
+  //  - writer: the release fence after seq goes odd keeps the data stores from
+  //    becoming visible before the odd seq does. An acquire CAS alone does not
+  //    order later stores after the CAS's own store.
+  //  - reader: begin_read's acquire load keeps data loads from being satisfied
+  //    before it; read_was_safe's acquire fence keeps them from being satisfied
+  //    after the re-check. An acquire *load* for the re-check (the old code)
+  //    only orders what follows it, so a torn snapshot could pass.
+  // The data itself is read with plain loads, as in every practical seqlock;
+  // the fences also stop the compiler moving those loads across them.
   inline void begin_write() {
       while (true) {
           uint32_t s = seq.load(std::memory_order_relaxed);
           if ((s & 1) == 0) { // no writer
               if (seq.compare_exchange_weak(s, s + 1, std::memory_order_acquire, std::memory_order_relaxed)) {
+                  std::atomic_thread_fence(std::memory_order_release);
                   break;
               }
           }
@@ -76,20 +89,21 @@ public:
   }
 
   inline uint32_t begin_read() {
-      uint32_t ret = seq.load(std::memory_order_relaxed);
+      uint32_t ret = seq.load(std::memory_order_acquire);
       while (__builtin_expect(ret & 1, 0)) {
           #if defined(__aarch64__)
           __builtin_arm_yield();
           #elif defined(__x86_64__) || defined(__i386__)
           __builtin_ia32_pause();
           #endif
-          ret = seq.load(std::memory_order_relaxed);
+          ret = seq.load(std::memory_order_acquire);
       }
       return ret;
   }
 
   inline bool read_was_safe(uint32_t old_seq) const {
-      return seq.load(std::memory_order_acquire) == old_seq;
+      std::atomic_thread_fence(std::memory_order_acquire);
+      return seq.load(std::memory_order_relaxed) == old_seq;
   }
 };
 
