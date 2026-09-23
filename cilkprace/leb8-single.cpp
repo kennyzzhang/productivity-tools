@@ -27,9 +27,10 @@ bool shadow_label::does_read_race(const os_label &reader) {
     // parallel write, the locked path in does_read_race_slow would report
     // nothing and change nothing (it reassigns the same label). The write_depth
     // tests matter: an identical reader still races with a parallel write, so
-    // is_identical alone would drop read-write races. Cheapest tests first; is_identical compares end_idx before any words. A
-    // hand-rolled masked two-word compare timed the same and misses wider
-    // labels (a fifth of nqueens' reads), so this uses the real thing.
+    // is_identical alone would drop read-write races. Cheapest tests first;
+    // is_identical compares end_idx before any words. A hand-rolled masked
+    // two-word compare timed the same and misses wider labels (a fifth of
+    // nqueens' reads), so this uses the real thing.
     if (write_depth <= active_reader.end_idx && write_depth % 4 != 3 &&
         active_reader.is_identical(reader) &&
         CILKPRACE_LIKELY(seqlock.read_was_safe(seq))) {
