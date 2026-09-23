@@ -29,11 +29,9 @@ from pathlib import Path
 # Every knob in cilkprace_ablation.h. "off" means the optimization is removed.
 KNOBS = [
     "READ_WIDEN_FASTPATH",
-    "READ_SLOW_IDENTICAL",
+    "READ_IDENT_FASTPATH",
     "WRITE_FASTPATH",
     "SEQLOCK",
-    "CACHE_ALIGN",
-    "RBW_FILTER",
     "GRANULE_UNROLL",
     "LABEL_CMP_FASTPATH",
     "BRANCH_HINTS",
@@ -165,7 +163,7 @@ def main():
     p.add_argument("--bench-build", default=str(examples / "build-ablate"))
     p.add_argument("--configs", default="full",
                    help="'full' (default), 'one-at-a-time', 'all-off', or a "
-                        "comma-separated list like 'no-SEQLOCK,no-CACHE_ALIGN+BRANCH_HINTS'")
+                        "comma-separated list like 'no-SEQLOCK,no-GRANULE_UNROLL+BRANCH_HINTS'")
     p.add_argument("--benchmarks", default=",".join(BENCHMARKS))
     p.add_argument("--workers", default="1,10",
                    help="comma-separated worker counts (default 1,10)")

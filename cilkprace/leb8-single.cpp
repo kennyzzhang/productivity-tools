@@ -1,21 +1,41 @@
 #include "shadow_label.h"
 
-// Deliberately no inline `active_reader.is_identical(reader)` check here.
-// does_read_race is inlined into every instrumented load, and that check made
-// it fat enough to cost 16% at 1 worker and 12% at 10 across the benchmark set
-// -- it also hid most of the value of the other optimizations, several of which
-// roughly doubled once it was gone. does_read_race_slow already re-checks
-// is_identical under the seqlock, so nothing is lost but the inline attempt.
-// Measured by tools/ablate.py; nqueens is the one benchmark that preferred it.
+// An inline is_identical check was once removed from here for costing 16% at 1
+// worker. That check ran unconditionally, called is_identical out of line in
+// the opencilk dylib, and grew does_read_race past the inliner's threshold.
+// The same-strand clause below runs only when the widen test cannot apply
+// (end_idx % 4 != 3), is_identical is now inline, and the whole read path is
+// always_inline (see leb8-single.h and cilkprace.h).
 bool shadow_label::does_read_race(const os_label &reader) {
-#if CILKPRACE_ABL_READ_WIDEN_FASTPATH
+#if CILKPRACE_ABL_READ_WIDEN_FASTPATH || CILKPRACE_ABL_READ_IDENT_FASTPATH
+  // Everything read here is speculative until read_was_safe() confirms no
+  // writer intervened, so every early return must go through it.
   uint32_t seq = seqlock.begin_read();
-  if ((active_reader.end_idx & 3) == 3 && write_depth <= active_reader.end_idx) {
-    if (active_reader.lca(reader) >= active_reader.end_idx) {
-      if (CILKPRACE_LIKELY(seqlock.read_was_safe(seq))) {
-        return false;
-      }
+  if ((active_reader.end_idx & 3) == 3) {
+#if CILKPRACE_ABL_READ_WIDEN_FASTPATH
+    // Entry summarizes the parallel readers under a P node; a reader inside
+    // that subtree adds nothing.
+    if (write_depth <= active_reader.end_idx &&
+        active_reader.lca(reader) >= active_reader.end_idx &&
+        CILKPRACE_LIKELY(seqlock.read_was_safe(seq))) {
+      return false;
     }
+#endif
+  } else {
+#if CILKPRACE_ABL_READ_IDENT_FASTPATH
+    // Entry is a single strand's label. If it is ours, and write_depth shows no
+    // parallel write, the locked path in does_read_race_slow would report
+    // nothing and change nothing (it reassigns the same label). The write_depth
+    // tests matter: an identical reader still races with a parallel write, so
+    // is_identical alone would drop read-write races. Cheapest tests first; is_identical compares end_idx before any words. A
+    // hand-rolled masked two-word compare timed the same and misses wider
+    // labels (a fifth of nqueens' reads), so this uses the real thing.
+    if (write_depth <= active_reader.end_idx && write_depth % 4 != 3 &&
+        active_reader.is_identical(reader) &&
+        CILKPRACE_LIKELY(seqlock.read_was_safe(seq))) {
+      return false;
+    }
+#endif
   }
 #endif
   return does_read_race_slow(reader);
@@ -45,20 +65,7 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
   do {
     seq = seqlock.begin_read();
     no_race = false;
-#if CILKPRACE_ABL_READ_SLOW_IDENTICAL
-    // Identical to the last reader is only safe when write_depth also says
-    // nothing parallel has written: the write_depth branch's does_read_race
-    // reaches `if (write_depth % 4 == 3) return true;` even for an identical
-    // reader, so short-circuiting on is_identical alone drops read-write races.
-    // Restrict the short-circuit to the case where the locked path provably
-    // makes no state change and reports nothing.
-    if (CILKPRACE_LIKELY(active_reader.is_identical(reader) &&
-                         write_depth <= active_reader.end_idx &&
-                         write_depth % 4 != 3)) {
-      no_race = true;
-    }
-#endif
-    if (!no_race && (active_reader.end_idx % 4 == 3) &&
+    if ((active_reader.end_idx % 4 == 3) &&
         (write_depth <= active_reader.end_idx)) {
       no_race = active_reader.lca(reader) >= active_reader.end_idx;
     }
@@ -79,6 +86,9 @@ bool shadow_label::does_read_race_slow(const os_label &reader) {
     return true;
   }
   if (lca_depth % 4 != 3) {
+    // Plain assignment on purpose, unlike leb8-range's copy_from: on arm64
+    // this 56-byte copy is three loads and three stores with no branches. A
+    // copy of only the words in use adds branches on end_idx and timed 0.994x.
     active_reader = reader;
   } else if (lca_depth < active_reader.end_idx) {
     active_reader.end_idx = lca_depth;
@@ -109,7 +119,7 @@ bool shadow_label::does_write_race_slow(const os_label &writer) {
     return true;
   }
   if (lca_depth % 4 != 3) {
-    active_reader = writer;
+    active_reader = writer;  // plain assignment; see the read path above
     write_depth = writer.end_idx;
   } else {
     return true;

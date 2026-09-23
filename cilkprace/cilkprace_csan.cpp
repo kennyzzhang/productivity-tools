@@ -65,6 +65,8 @@ CILKSAN_API void __csan_func_exit(const csi_id_t func_exit_id, const csi_id_t fu
 }
 
 
+// always_inline: top of the read path; see shadow_label::does_read_race.
+__attribute__((always_inline))
 CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
                            int32_t num_bytes, const load_prop_t prop,
                            const os_label *cur_lab) {
@@ -77,12 +79,6 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
       << ", atomic=" << prop.is_atomic << ", threadlocal="
       << prop.is_thread_local << ", basic_read_before_write="
       << prop.is_read_before_write_in_bb << ")" << std::endl;
-#endif
-#if CILKPRACE_ABL_RBW_FILTER
-  // Putting this guard here shouldn't affect correctness but might make us faster
-  // As we filter out reads that are about to be writes anyway
-  if (prop.is_read_before_write_in_bb)
-    return;
 #endif
   if (CILKPRACE_UNLIKELY(!HAS_INIT || !cur_lab)) return;
   tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
@@ -101,6 +97,8 @@ CILKSAN_API void __csan_after_loop(const csi_id_t loop_id,
 CILKSAN_API void __csan_destroy_loop(const csi_id_t loop_id) {
 }
 
+// always_inline: top of the read path; see shadow_label::does_read_race.
+__attribute__((always_inline))
 CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
                            size_t num_bytes, const load_prop_t prop,
                            const os_label *cur_lab) {
@@ -114,16 +112,12 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
       << prop.is_thread_local << ", basic_read_before_write="
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
-#if CILKPRACE_ABL_RBW_FILTER
-  // Putting this guard here shouldn't affect correctness but might make us faster
-  // As we filter out reads that are about to be writes anyway
-  if (prop.is_read_before_write_in_bb)
-    return;
-#endif
   if (CILKPRACE_UNLIKELY(!HAS_INIT || !cur_lab)) return;
   tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
 }
 
+// always_inline: top of the write path; see shadow_label::does_read_race.
+__attribute__((always_inline))
 CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
                              int32_t num_bytes, const store_prop_t prop,
                              const os_label *cur_lab) {
@@ -140,6 +134,8 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
   tool_instance.register_write((uint64_t)addr, num_bytes, store_id, *cur_lab);
 }
 
+// always_inline: top of the write path; see shadow_label::does_read_race.
+__attribute__((always_inline))
 CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
                              size_t num_bytes, const store_prop_t prop,
                              const os_label *cur_lab) {

@@ -89,6 +89,8 @@ public:
                         const os_label& cur_lab, const shadow_label& lab);
 
 
+  // always_inline for the same reason as register_read.
+  __attribute__((always_inline))
   void register_write(uintptr_t beg, size_t num_bytes,
                       csi_id_t store_id,
                       const os_label& cur_lab);
@@ -96,6 +98,10 @@ public:
   void register_write(uintptr_t beg, size_t num_bytes,
                       csi_id_t store_id);
 
+  // always_inline for the same reason as shadow_label::does_read_race: forcing
+  // that one inline made this function the one that crossed the inliner's
+  // threshold, and every read then called it out of line.
+  __attribute__((always_inline))
   void register_read(uintptr_t beg, size_t num_bytes,
                      csi_id_t load_id,
                      const os_label& cur_lab);
