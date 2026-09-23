@@ -14,6 +14,7 @@ CilkpraceImpl_t::CilkpraceImpl_t() {
     ignore_stdlib_races = true;
   }
   HAS_INIT = true;
+  CHECKING = CHECKING_DISABLED == 0;
 }
 
 CilkpraceImpl_t::~CilkpraceImpl_t() {}

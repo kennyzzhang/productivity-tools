@@ -14,6 +14,10 @@
 
 
 __attribute__((visibility("default"))) bool HAS_INIT = false;
+// True when accesses should be checked: initialized, and not inside a
+// __cilksan_disable_checking() region. The load/store hooks test this alone.
+__attribute__((visibility("default"))) bool CHECKING = false;
+__attribute__((visibility("default"))) int CHECKING_DISABLED = 0;
 #define CILKSAN_INITIALIZED HAS_INIT
 
 // FILE io used to print error messages

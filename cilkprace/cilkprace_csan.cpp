@@ -80,7 +80,7 @@ CILKSAN_API void __csan_load(const csi_id_t load_id, const void *addr,
       << prop.is_thread_local << ", basic_read_before_write="
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
-  if (CILKPRACE_UNLIKELY(!HAS_INIT || !cur_lab)) return;
+  if (CILKPRACE_UNLIKELY(!CHECKING || !cur_lab)) return;
   tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
 }
 
@@ -112,7 +112,7 @@ CILKSAN_API void __csan_large_load(const csi_id_t load_id, const void *addr,
       << prop.is_thread_local << ", basic_read_before_write="
       << prop.is_read_before_write_in_bb << ")" << std::endl;
 #endif
-  if (CILKPRACE_UNLIKELY(!HAS_INIT || !cur_lab)) return;
+  if (CILKPRACE_UNLIKELY(!CHECKING || !cur_lab)) return;
   tool_instance.register_read((uint64_t)addr, num_bytes, load_id, *cur_lab);
 }
 
@@ -130,7 +130,7 @@ CILKSAN_API void __csan_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  if (CILKPRACE_UNLIKELY(!HAS_INIT || !cur_lab)) return;
+  if (CILKPRACE_UNLIKELY(!CHECKING || !cur_lab)) return;
   tool_instance.register_write((uint64_t)addr, num_bytes, store_id, *cur_lab);
 }
 
@@ -148,7 +148,7 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
       << prop.may_be_captured << ", atomic=" << prop.is_atomic
       << ", threadlocal=" << prop.is_thread_local << ")" << std::endl;
 #endif
-  if (CILKPRACE_UNLIKELY(!HAS_INIT || !cur_lab)) return;
+  if (CILKPRACE_UNLIKELY(!CHECKING || !cur_lab)) return;
   tool_instance.register_write((uint64_t)addr, num_bytes, store_id, *cur_lab);
 }
 
@@ -332,7 +332,7 @@ CILKSAN_API void __csan_get_MAAP(MAAP_t *ptr, csi_id_t id, unsigned idx) {
 // This is what libhooks translates things in to
 void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
                                     uintptr_t ptr, size_t len) {
-  if (!HAS_INIT) return;
+  if (!CHECKING) return;
 #ifdef TRACE_CALLS
   auto store = (const source_loc_t*) __csan_get_load_source_loc(call_id);
 
@@ -351,7 +351,7 @@ void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
 // ptr.
 void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
                                      uintptr_t ptr, size_t len) {
-  if (!HAS_INIT) return;
+  if (!CHECKING) return;
 #ifdef TRACE_CALLS
   auto store = (const source_loc_t*) __csan_get_store_source_loc(call_id);
   outs_red << "CHECK WRITE ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
@@ -369,22 +369,18 @@ void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
 
 // outside world (including runtime).
 // Non-inlined version for user code to use
+// Checking can be turned off around code that should not be race-checked
+// (e.g. benchmark setup). Calls nest. Only call these from serial code: they
+// update plain globals that the access hooks read. Allocation hooks keep
+// running while checking is off, so reused memory is still cleared.
 CILKSAN_API void __cilksan_enable_checking(void) {
-
-  fprintf(stderr, "UNHANDLED ENABLE CHECKING\n");
-
-  //checking_disabled--;  
-  //cilksan_assert(checking_disabled >= 0);
-  //DBG_TRACE(BASIC, "External enable checking (%d).\n", checking_disabled);
+  CHECKING_DISABLED--;
+  CHECKING = HAS_INIT && CHECKING_DISABLED == 0;
 }
 
 // Non-inlined version for user code to use
 CILKSAN_API void __cilksan_disable_checking(void) {
-
-  fprintf(stderr, "UNHANDLED DISABLE CHECKING\n");
-
-  //cilksan_assert(checking_disabled >= 0);
-  //checking_disabled++;
-  //DBG_TRACE(BASIC, "External disable checking (%d).\n", checking_disabled);
+  CHECKING_DISABLED++;
+  CHECKING = false;
 }
 

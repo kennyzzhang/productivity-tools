@@ -34,6 +34,8 @@ set(all_tests_cpp
   single_spawn_race
   single_spawn_rr_norace
   single_spawn_rw_race
+  spp_karatsuba
+  spp_sort
   stack_reuse
   strdup
 )

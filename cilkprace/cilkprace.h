@@ -33,6 +33,8 @@
 #define CILKSAN_API extern "C" CILKPRACE_VIS __attribute__((visibility("default")))
 
 extern __attribute__((visibility("default"))) bool HAS_INIT;
+extern __attribute__((visibility("default"))) bool CHECKING;
+extern __attribute__((visibility("default"))) int CHECKING_DISABLED;
 
 // Stack structures for keeping track of MAAP (May Access Alias in Parallel)
 // information inserted by the compiler before a call.
