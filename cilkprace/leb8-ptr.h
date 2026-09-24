@@ -19,9 +19,9 @@
 // shadow_label.
 //
 // A strand's label is added to the table the first time the strand stores it
-// in an entry, and the id is kept in the strand's pedigree-frame tool words
-// (see os_label.h) until the runtime's spawn and sync hooks clear it when the
-// label changes. The table only grows.
+// in an entry, and the id is kept in the tool word after the strand's label in
+// its pedigree frame, which the runtime zeroes whenever the label changes (see
+// tool_word in cheetah's pedigree-internal.h). The table only grows.
 //
 // Build with CILKPRACE_LABEL_IMPL=leb8-ptr.
 
@@ -40,7 +40,7 @@ extern leb8_ptr_record *leb8_ptr_table;
 // Adds l to the table and returns its id. Out of line: once per strand.
 uint32_t leb8_ptr_store_label(const os_label &l);
 
-// Reserves the table and registers the spawn and sync hooks.
+// Reserves the table.
 void leb8_ptr_init();
 
 class shadow_label {

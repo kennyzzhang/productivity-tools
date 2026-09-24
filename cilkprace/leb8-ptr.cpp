@@ -3,7 +3,6 @@
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
-#include <dlfcn.h>
 #include <sys/mman.h>
 
 // See leb8-ptr.h.
@@ -79,9 +78,9 @@ __attribute__((noinline)) uint32_t leb8_ptr_store_label(const os_label &l) {
 
 namespace {
 
-// The strand's id lives complemented in its first tool word, so the zeroed
-// word of a new frame reads as ~0u: not in the table yet, and matching no
-// entry.
+// The strand's id lives complemented in the tool word after its label (see
+// leb8-ptr.h), so the zeroed word reads as ~0u: not in the table yet, and
+// matching no entry.
 __attribute__((always_inline)) inline uint64_t *id_word(const os_label &cur) {
   return reinterpret_cast<uint64_t *>(const_cast<os_label *>(&cur) + 1);
 }
@@ -245,11 +244,6 @@ __attribute__((noinline)) bool shadow_label::does_write_race_slow(const os_label
   return does_write_race(writer);
 }
 
-// A strand's label changes at every spawn (the parent's; the child's frame is
-// new and its tool words zeroed) and every sync, so its id is dropped there.
-static void on_spawn(void **parent, void **, const void *) { parent[0] = nullptr; }
-static void on_sync(void **frame, const void *) { frame[0] = nullptr; }
-
 void leb8_ptr_init() {
   void *table = mmap(nullptr, size_t(kMaxRecords) * sizeof(leb8_ptr_record),
                      PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_NORESERVE, -1, 0);
@@ -258,11 +252,4 @@ void leb8_ptr_init() {
     abort();
   }
   leb8_ptr_table = static_cast<leb8_ptr_record *>(table);
-  auto set_hooks = reinterpret_cast<void (*)(__cilkrts_spawn_hook, __cilkrts_sync_hook)>(
-      dlsym(RTLD_DEFAULT, "__cilkrts_set_strand_hooks"));
-  if (!set_hooks) {
-    fprintf(stderr, "cilkprace: the Cilk runtime has no strand hooks; rebuild it\n");
-    abort();
-  }
-  set_hooks(on_spawn, on_sync);
 }
