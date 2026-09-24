@@ -13,6 +13,9 @@ CilkpraceImpl_t::CilkpraceImpl_t() {
   } else {
     ignore_stdlib_races = true;
   }
+#if CILKPRACE_USE_LEB8_PTR
+  leb8_ptr_init();
+#endif
   HAS_INIT = true;
   CHECKING = CHECKING_DISABLED == 0;
 }

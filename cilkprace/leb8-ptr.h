@@ -1,0 +1,66 @@
+#ifndef _LEB8_PTR_H
+#define _LEB8_PTR_H
+
+// leb8-single on a pointer-table shadow. The labels and the check are
+// leb8-single's (leb8-single.cpp); what changes is where the reader's label
+// lives. Instead of a 64-byte shadow_label per granule holding a copy of it,
+// each granule holds one 64-bit word
+//
+//   bits  0-31  id of the active reader's label in a global label table
+//   bits 32-47  active reader's end_idx: the label's own, or shorter after
+//               widening to a P node (the table entry is never changed)
+//   bits 48-63  write_depth
+//
+// so the shadow is 8x smaller, a check is one load and, when the entry
+// changes, one 64-bit CAS in place of the seqlock and lock (the locked section
+// in leb8-single is a pure read-modify-write of the entry), and the
+// same-strand tests compare ids, not label words. The all-zero word is the
+// empty entry: table entry 0 is the all-zero label, exactly like a zeroed
+// shadow_label.
+//
+// A strand's label is added to the table the first time the strand stores it
+// in an entry, and the id is kept in the strand's pedigree-frame tool words
+// (see os_label.h) until the runtime's spawn and sync hooks clear it when the
+// label changes. The table only grows.
+//
+// Build with CILKPRACE_LABEL_IMPL=leb8-ptr.
+
+#pragma GCC visibility push(default)
+
+#include <cilk/cilkprace_ablation.h>
+#include <cilk/os_label.h>
+#include <cstdint>
+
+struct alignas(64) leb8_ptr_record {
+  os_label label;
+};
+
+extern leb8_ptr_record *leb8_ptr_table;
+
+// Adds l to the table and returns its id. Out of line: once per strand.
+uint32_t leb8_ptr_store_label(const os_label &l);
+
+// Reserves the table and registers the spawn and sync hooks.
+void leb8_ptr_init();
+
+class shadow_label {
+public:
+  uint64_t entry = 0;
+
+  // always_inline: CSI links the tool as available_externally bitcode, and
+  // these are the hot paths (see leb8-single.h).
+  __attribute__((always_inline)) bool does_read_race(const os_label &reader);
+  __attribute__((always_inline)) bool does_write_race(const os_label &writer);
+
+  // The updates, out of line like leb8-single's locked paths. w is the entry
+  // as the inline part read it.
+  bool does_read_race_slow(const os_label &reader, uint32_t cur_id, uint64_t w,
+                           unsigned lca_depth);
+  bool does_write_race_slow(const os_label &writer, uint32_t cur_id, uint64_t w);
+};
+
+static_assert(sizeof(shadow_label) == 8, "a shadow entry is one word");
+
+#pragma GCC visibility pop
+
+#endif /* _LEB8_PTR_H */
