@@ -55,7 +55,7 @@ set_property(CACHE CILKPRACE_GRANULARITY PROPERTY STRINGS "4" "8")
 set(CILKPRACE_COMMON_DEFINITIONS)
 # Label width, defined by cheetah/runtime/CMakeLists.txt. Defaulted here too so
 # cilkprace can be configured standalone; the two must match.
-set(CILKPRACE_LABEL_WORDS "6" CACHE STRING "Label width in 64-bit words for leb8-single (cheetah + cilkprace)")
+set(CILKPRACE_LABEL_WORDS "12" CACHE STRING "Label width in 64-bit words for leb8-single (cheetah + cilkprace)")
 list(APPEND CILKPRACE_COMMON_DEFINITIONS ${CILKPRACE_LABEL_DEF} "CILKPRACE_GRANULARITY=${CILKPRACE_GRANULARITY}"
      "CILKPRACE_LABEL_WORDS=${CILKPRACE_LABEL_WORDS}")
 append_list_if(CILKTOOLS_HAS_CILK SERIAL_TOOL=0 CILKPRACE_COMMON_DEFINITIONS)

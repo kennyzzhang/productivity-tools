@@ -11,10 +11,9 @@
 // A shadow_label is os_label + write_depth + padding + seqlock.
 #define CILKPRACE_SHADOW_RAW (CILKPRACE_LABEL_WORDS * 8 + 16)
 
-// No alignas: the shadow is a page-aligned array indexed by granule, so at the
-// default width (64 bytes) every entry already starts on a cache line, and at
-// 2 words (32 bytes) two entries share one. Forcing alignment measured no
-// difference.
+// No alignas: the shadow is a page-aligned array indexed by granule, so at 6
+// words (64 bytes) every entry starts on a cache line, and at 2 words (32
+// bytes) two entries share one. Forcing alignment measured no difference.
 class shadow_label {
 public:
   os_label active_reader;
