@@ -1,6 +1,6 @@
-# Shadow label implementation for cilkprace (leb8-single, leb8-range, or string)
-set(CILKPRACE_LABEL_IMPL "leb8-single" CACHE STRING "Shadow label implementation for cilkprace (leb8-single, leb8-range, string, or leb8-ptr)")
-set_property(CACHE CILKPRACE_LABEL_IMPL PROPERTY STRINGS "leb8-single" "leb8-range" "string" "leb8-ptr")
+# Shadow label implementation for cilkprace
+set(CILKPRACE_LABEL_IMPL "leb8-single" CACHE STRING "Shadow label implementation for cilkprace (leb8-single, leb8-range, string, leb8-ptr, or leb8-short-ptr)")
+set_property(CACHE CILKPRACE_LABEL_IMPL PROPERTY STRINGS "leb8-single" "leb8-range" "string" "leb8-ptr" "leb8-short-ptr")
 
 if (CILKPRACE_LABEL_IMPL STREQUAL "leb8-range")
   set(CILKPRACE_LABEL_SRC leb8-range.cpp)
@@ -13,6 +13,11 @@ elseif (CILKPRACE_LABEL_IMPL STREQUAL "leb8-ptr")
   # cheetah/runtime/CMakeLists.txt builds the runtime's labels to match.
   set(CILKPRACE_LABEL_SRC leb8-ptr.cpp)
   set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_ANCHOR=1" "CILKPRACE_USE_LEB8_PTR=1")
+elseif (CILKPRACE_LABEL_IMPL STREQUAL "leb8-short-ptr")
+  # leb8-single labels behind packed pointers in one-word shadow entries
+  # (leb8-short-ptr.h).
+  set(CILKPRACE_LABEL_SRC leb8-short-ptr.cpp)
+  set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_SINGLE=1" "CILKPRACE_USE_LEB8_SHORT_PTR=1")
 else()
   set(CILKPRACE_LABEL_SRC leb8-single.cpp)
   set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_SINGLE=1")
