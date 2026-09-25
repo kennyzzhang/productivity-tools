@@ -324,7 +324,9 @@ static inline const csan_source_loc_t *get_fed_entry(fed_type_t fed_type,
                                                 const csi_id_t csi_id) {
   fed_table_index_t *index = &fed_tables[fed_type];
 
-  if (csi_id < 0 || (uint64_t)csi_id < index->num_total_entries) {
+  // Negative IDs (unknown, e.g. accesses in inlined runtime code) have no
+  // entry; indexing with one read far outside the tables.
+  if (csi_id >= 0 && (uint64_t)csi_id < index->num_total_entries) {
     fed_table_t *table = get_table_for_id(index, csi_id);
     return get_entry_for_table(table, csi_id);
   } else {

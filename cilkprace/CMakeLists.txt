@@ -9,9 +9,10 @@ elseif (CILKPRACE_LABEL_IMPL STREQUAL "string")
   set(CILKPRACE_LABEL_SRC string-label.cpp)
   set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_STRING=1")
 elseif (CILKPRACE_LABEL_IMPL STREQUAL "leb8-ptr")
-  # leb8-single labels in a table, with one-word shadow entries (leb8-ptr.h).
+  # leb8-anchor labels in a table, with one-word shadow entries (leb8-ptr.h).
+  # cheetah/runtime/CMakeLists.txt builds the runtime's labels to match.
   set(CILKPRACE_LABEL_SRC leb8-ptr.cpp)
-  set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_SINGLE=1" "CILKPRACE_USE_LEB8_PTR=1")
+  set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_ANCHOR=1" "CILKPRACE_USE_LEB8_PTR=1")
 else()
   set(CILKPRACE_LABEL_SRC leb8-single.cpp)
   set(CILKPRACE_LABEL_DEF "USE_OS_LABEL_LEB8_SINGLE=1")

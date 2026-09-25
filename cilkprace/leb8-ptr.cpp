@@ -78,21 +78,23 @@ __attribute__((noinline)) uint32_t leb8_ptr_store_label(const os_label &l) {
 
 namespace {
 
-// The strand's id lives complemented in the tool word after its label (see
-// leb8-ptr.h), so the zeroed word reads as ~0u: not in the table yet, and
-// matching no entry.
+// The strand's id lives complemented in the low half of the tool word after
+// its label (see leb8-ptr.h), so the freshly reset word reads as ~0u: not in
+// the table yet, and matching no entry. The top bit is the runtime's
+// os_label::tool_word_deep.
 __attribute__((always_inline)) inline uint64_t *id_word(const os_label &cur) {
   return reinterpret_cast<uint64_t *>(const_cast<os_label *>(&cur) + 1);
 }
 
 __attribute__((always_inline)) inline uint32_t store_current_label(const os_label &cur) {
   uint32_t id = leb8_ptr_store_label(cur);
-  *id_word(cur) = ~static_cast<uint64_t>(id);
+  *id_word(cur) = (*id_word(cur) & os_label::tool_word_deep) | static_cast<uint32_t>(~id);
   return id;
 }
 
-// os_label::lca, but of the first a_end bits of a (a's own end_idx is its
-// full length; the entry may use a shorter prefix).
+// os_label::lca of the first a_end bits of a (a's own end_idx is its full
+// length; the entry may use a shorter prefix), for a and b with the same
+// anchor, so the same window base. Indices are window-relative, like end_idx.
 __attribute__((always_inline)) inline unsigned lca(const os_label &a, unsigned a_end,
                                                    const os_label &b) {
   unsigned last_idx = b.end_idx < a_end ? b.end_idx : a_end;
@@ -151,61 +153,180 @@ __attribute__((always_inline)) inline bool update(uint64_t &entry, uint64_t old,
                                      __ATOMIC_RELAXED);
 }
 
-__attribute__((always_inline)) inline uint64_t encode(uint32_t id, unsigned end,
-                                                      unsigned write_depth) {
-  return id | static_cast<uint64_t>(end) << 32 | static_cast<uint64_t>(write_depth) << 48;
+// An entry in whole-label terms, for the out-of-line paths.
+struct wide_state {
+  uint32_t id;
+  const os_label *label;
+  uint32_t end, write_depth;
+};
+
+wide_state decode(uint64_t w) {
+  uint32_t id = static_cast<uint32_t>(w);
+  const leb8_ptr_record &r = leb8_ptr_table[id];
+  unsigned end = static_cast<uint16_t>(w >> 32);
+  if (end == kLeb8PtrWide)
+    return {id, &r.label, r.end, r.write_depth};
+  return {id, &r.label, r.label.base + (end & ~kLeb8PtrDeep),
+          r.label.base + static_cast<unsigned>(w >> 48)};
+}
+
+// The whole-label LCA of entry e (read as w) and cur: the inline lca when they
+// share a window, as the inline paths use, else the label's own.
+unsigned entry_lca(const wide_state &e, uint64_t w, uint32_t cur_id, const os_label &cur) {
+  unsigned end = static_cast<uint16_t>(w >> 32);
+  if (end != kLeb8PtrWide && e.label->anchor == cur.anchor)
+    return cur.base + lca_with(e.id, end & ~kLeb8PtrDeep, cur_id, cur);
+  unsigned lca_depth = e.label->lca(cur);
+  return lca_depth < e.end ? lca_depth : e.end;
+}
+
+// The entry for label id (whose label is l) with this end and write_depth:
+// narrow if they fit relative to l's window, else a wide record. Wide records
+// are immutable, so equal ones are shared through a small per-worker cache:
+// a deep strand typically stores the same write_depth into many entries (say,
+// reading data written near the root), and without it every such read would
+// add a record.
+uint64_t encode(uint32_t id, const os_label &l, uint32_t end, uint32_t write_depth) {
+  if (write_depth >= l.base) // then end >= write_depth >= base, and end <= l.end()
+    return id | static_cast<uint64_t>((end - l.base) | (l.anchor ? kLeb8PtrDeep : 0)) << 32 |
+           static_cast<uint64_t>(write_depth - l.base) << 48;
+  struct slot {
+    uint32_t id, end, write_depth, wide;
+  };
+  static thread_local slot cache[256];
+  slot &c = cache[(id * 0x9E3779B1u ^ end * 0x85EBCA77u ^ write_depth) % 256];
+  if (c.wide == 0 || c.id != id || c.end != end || c.write_depth != write_depth) {
+    uint32_t wide = leb8_ptr_store_label(l);
+    leb8_ptr_table[wide].end = end;
+    leb8_ptr_table[wide].write_depth = write_depth;
+    c = {id, end, write_depth, wide};
+  }
+  return c.wide | static_cast<uint64_t>(kLeb8PtrWide) << 32;
+}
+
+// The strand's own label, from the table.
+__attribute__((always_inline)) inline uint32_t own_id(uint32_t cur_id, const os_label &cur) {
+  return cur_id == ~0u ? store_current_label(cur) : cur_id;
 }
 
 } // namespace
+
+__attribute__((always_inline)) inline uint64_t encode_narrow(uint32_t id, unsigned end,
+                                                             unsigned write_depth) {
+  return id | static_cast<uint64_t>(end) << 32 | static_cast<uint64_t>(write_depth) << 48;
+}
 
 // leb8-single's does_read_race: the same-strand and widened-summary tests
 // inline, the update out of line.
 bool shadow_label::does_read_race(const os_label &reader) {
   COUNT(reads);
-  uint32_t cur_id = ~static_cast<uint32_t>(*id_word(reader));
+  uint64_t tool_word = *id_word(reader);
+  uint32_t cur_id = ~static_cast<uint32_t>(tool_word);
   uint64_t w = load(entry);
   uint32_t id = static_cast<uint32_t>(w);
+  // With the deep bit: see the summary test below.
   unsigned end = static_cast<uint16_t>(w >> 32);
   unsigned write_depth = w >> 48;
   bool summary = (end & 3) == 3;
   // Entry is a single strand's label. If it is ours and no parallel write is
-  // recorded, nothing would change.
-  if (!summary && id == cur_id && end == reader.end_idx && write_depth <= end &&
-      write_depth % 4 != 3) {
+  // recorded, nothing would change. Same id, so same window base.
+  if (!summary && id == cur_id && (end & ~kLeb8PtrDeep) == reader.end_idx &&
+      write_depth <= end && write_depth % 4 != 3) {
     COUNT(read_same);
     return false;
   }
+  // Only meaningful if both labels are within their windows; see below.
   unsigned lca_depth = lca_with(id, end, cur_id, reader);
   // Entry summarizes the parallel readers under a P node; a reader inside that
-  // subtree adds nothing.
-  if (summary && write_depth <= end && lca_depth >= end) {
+  // subtree adds nothing. An entry that is deep or wide never passes, as its
+  // end has the deep bit and the LCA is at most the reader's end_idx, so it
+  // goes out of line, which then ignores lca_depth. A deep reader is excluded
+  // by the tool word's bit.
+  if (summary && write_depth <= end && lca_depth >= end &&
+      !(tool_word & os_label::tool_word_deep)) {
     COUNT(read_widened);
     return false;
   }
   return does_read_race_slow(reader, cur_id, w, lca_depth);
 }
 
-// leb8-single's locked read path, as a CAS of the entry w that was read.
-__attribute__((noinline)) bool shadow_label::does_read_race_slow(const os_label &reader,
-                                                                 uint32_t cur_id, uint64_t w,
-                                                                 unsigned lca_depth) {
-  uint32_t id = static_cast<uint32_t>(w);
-  unsigned end = static_cast<uint16_t>(w >> 32);
-  unsigned write_depth = w >> 48;
+// The update paths for an entry or accessor whose label has left its window,
+// in whole-label terms. Out of line on their own, so the shallow paths below
+// stay as lean as leb8-ptr's were before labels had windows. Each returns the
+// race verdict, or -1 if another check changed the entry first.
+__attribute__((noinline)) static int read_update_deep(uint64_t &entry, const os_label &reader,
+                                                      uint32_t cur_id, uint64_t w) {
+  wide_state e = decode(w);
+  unsigned lca_depth = entry_lca(e, w, cur_id, reader);
+  unsigned end = e.end, write_depth = e.write_depth;
   if (lca_depth < write_depth)
     write_depth = lca_depth;
   bool race = write_depth % 4 == 3;
+  uint32_t id = e.id;
   if (!race) {
     if (lca_depth % 4 != 3) {
-      id = cur_id == ~0u ? store_current_label(reader) : cur_id;
-      end = reader.end_idx;
+      id = own_id(cur_id, reader);
+      end = reader.end();
     } else if (lca_depth < end) {
       end = lca_depth;
     }
   }
-  uint64_t nw = encode(id, end, write_depth);
-  if (nw == w || update(entry, w, nw))
+  if (id == e.id && end == e.end && write_depth == e.write_depth)
     return race;
+  if (update(entry, w, encode(id, leb8_ptr_table[id].label, end, write_depth)))
+    return race;
+  return -1;
+}
+
+__attribute__((noinline)) static int write_update_deep(uint64_t &entry, const os_label &writer,
+                                                       uint32_t cur_id, uint64_t w) {
+  wide_state e = decode(w);
+  unsigned lca_depth = entry_lca(e, w, cur_id, writer);
+  unsigned end = e.end, write_depth = e.write_depth;
+  if (lca_depth < write_depth)
+    write_depth = lca_depth;
+  bool race = write_depth % 4 == 3 || lca_depth % 4 == 3;
+  uint32_t id = e.id;
+  if (!race) {
+    id = own_id(cur_id, writer);
+    end = write_depth = writer.end();
+  }
+  if (id == e.id && end == e.end && write_depth == e.write_depth)
+    return race;
+  if (update(entry, w, encode(id, leb8_ptr_table[id].label, end, write_depth)))
+    return race;
+  return -1;
+}
+
+// leb8-single's locked read path, as a CAS of the entry w that was read. When
+// both labels are within their windows, whole-label and relative indices are
+// the same, the inline path's lca_depth holds, and every result is narrow.
+__attribute__((noinline)) bool shadow_label::does_read_race_slow(const os_label &reader,
+                                                                 uint32_t cur_id, uint64_t w,
+                                                                 unsigned lca_depth) {
+  if ((w >> 32 & kLeb8PtrDeep) || reader.anchor) {
+    int race = read_update_deep(entry, reader, cur_id, w);
+    if (race >= 0)
+      return race;
+  } else {
+    uint32_t id = static_cast<uint32_t>(w);
+    unsigned end = static_cast<uint16_t>(w >> 32);
+    unsigned write_depth = w >> 48;
+    if (lca_depth < write_depth)
+      write_depth = lca_depth;
+    bool race = write_depth % 4 == 3;
+    if (!race) {
+      if (lca_depth % 4 != 3) {
+        id = own_id(cur_id, reader);
+        end = reader.end_idx;
+      } else if (lca_depth < end) {
+        end = lca_depth;
+      }
+    }
+    uint64_t nw = encode_narrow(id, end, write_depth);
+    if (nw == w || update(entry, w, nw))
+      return race;
+  }
   // Another check changed the entry since it was read: check again.
   return does_read_race(reader);
 }
@@ -216,8 +337,9 @@ bool shadow_label::does_write_race(const os_label &writer) {
   COUNT(writes);
   uint32_t cur_id = ~static_cast<uint32_t>(*id_word(writer));
   uint64_t w = load(entry);
+  unsigned end = writer.end_idx;
   if (static_cast<uint32_t>(w) == cur_id &&
-      static_cast<uint16_t>(w >> 32) == writer.end_idx && (w >> 48) >= writer.end_idx) {
+      (static_cast<uint16_t>(w >> 32) & ~kLeb8PtrDeep) == end && (w >> 48) >= end) {
     COUNT(write_same);
     return false;
   }
@@ -229,18 +351,25 @@ __attribute__((noinline)) bool shadow_label::does_write_race_slow(const os_label
                                                                   uint32_t cur_id, uint64_t w) {
   uint32_t id = static_cast<uint32_t>(w);
   unsigned end = static_cast<uint16_t>(w >> 32);
-  unsigned write_depth = w >> 48;
-  unsigned lca_depth = lca_with(id, end, cur_id, writer);
-  if (lca_depth < write_depth)
-    write_depth = lca_depth;
-  bool race = write_depth % 4 == 3 || lca_depth % 4 == 3;
-  if (!race) {
-    id = cur_id == ~0u ? store_current_label(writer) : cur_id;
-    end = write_depth = writer.end_idx;
+  if ((end & kLeb8PtrDeep) || writer.anchor) {
+    int race = write_update_deep(entry, writer, cur_id, w);
+    if (race >= 0)
+      return race;
+  } else {
+    // Both labels within their windows, as in does_read_race_slow.
+    unsigned write_depth = w >> 48;
+    unsigned lca_depth = lca_with(id, end, cur_id, writer);
+    if (lca_depth < write_depth)
+      write_depth = lca_depth;
+    bool race = write_depth % 4 == 3 || lca_depth % 4 == 3;
+    if (!race) {
+      id = own_id(cur_id, writer);
+      end = write_depth = writer.end_idx;
+    }
+    uint64_t nw = encode_narrow(id, end, write_depth);
+    if (nw == w || update(entry, w, nw))
+      return race;
   }
-  uint64_t nw = encode(id, end, write_depth);
-  if (nw == w || update(entry, w, nw))
-    return race;
   return does_write_race(writer);
 }
 

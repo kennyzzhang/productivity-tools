@@ -149,7 +149,7 @@ foreach(test IN LISTS all_tests)
   endforeach()
 endforeach()
 
-option(ENABLE_STATIC_RACE_DETECTION "Enable static race detection" OFF)
+option(ENABLE_STATIC_RACE_DETECTION "Enable static race detection" ON)
 if(ENABLE_STATIC_RACE_DETECTION)
   set(STATIC_RACE_DETECTION_FLAG "SHELL:-mllvm -enable-static-race-detection=true")
 else()
