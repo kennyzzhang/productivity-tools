@@ -9,10 +9,6 @@ inline unsigned worker_number() {
 #pragma clang diagnostic pop
 }
 
-/*static*/ inline bool checkMAAP(MAAP_t val, MAAP_t flag) {
-  return static_cast<uint8_t>(val) & static_cast<uint8_t>(flag);
-}
-
 CILKTOOL_API void __csi_init() {}
 
 CILKTOOL_API void __csi_unit_init(const char *const file_name,
@@ -209,7 +205,7 @@ void __csi_before_free(const csi_id_t free_id, const void *ptr,
            << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
 
-  tool_instance.register_free((uintptr_t) ptr);
+  tool_instance.register_heap_free((uintptr_t)ptr, free_id, free_site_t::free);
 }
 
 CILKTOOL_API

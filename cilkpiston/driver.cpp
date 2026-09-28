@@ -1083,6 +1083,19 @@ CILKSAN_API void __csan_alloc_strndup(const csi_id_t allocfn_id,
   }
 }
 
+// Hooks called before a free or delete, and before an allocation function
+// with an old pointer (realloc). This tool handles both after the call.
+CILKSAN_API
+void __csan_before_free(const csi_id_t free_id,
+                        __attribute__((noescape)) const void *ptr,
+                        const free_prop_t prop) {}
+
+CILKSAN_API
+void __csan_before_allocfn(const csi_id_t allocfn_id, size_t size, size_t num,
+                           size_t alignment,
+                           __attribute__((noescape)) const void *oldaddr,
+                           const allocfn_prop_t prop) {}
+
 // Hook called after any free or delete.
 CILKSAN_API
 void __csan_after_free(const csi_id_t free_id,

@@ -1,5 +1,4 @@
 #include "cilkprace.h"
-#include "stack.h"
 
 extern bool HAS_INIT;
 
@@ -10,43 +9,22 @@ inline unsigned worker_number() {
 #pragma clang diagnostic pop
 }
 
-__attribute__((visibility("default"))) MAAPstack_reducer MAAPs;
-__attribute__((visibility("default"))) ustack_reducer MAAP_counts;
-
-/*static*/ inline bool checkMAAP(MAAP_t val, MAAP_t flag) {
-  return static_cast<uint8_t>(val) & static_cast<uint8_t>(flag);
-}
-
-
 CILKSAN_API
 void __csan_init() {};
 CILKSAN_API
 void __csan_unit_init(const char * const file_name,
                       const instrumentation_counts_t counts) {};
 
+// Cilksan keeps MAAPs (the compiler's may-access-alias-in-parallel flags)
+// across calls here. Cilkprace has no MAAP support: the driver compiles it
+// with -cilksan-maap-checks=false, so MAAP_count is always 0.
 CILKSAN_API
-void __csan_before_call(const csi_id_t call_id, const csi_id_t func_id, unsigned MAAP_count, const func_prop_t prop) {
-#ifdef TRACE_CALLS
-  outs_red
-      << "[W" << worker_number() << "] before_call(fid=" << func_id << ", nsr="
-      << prop.num_sync_reg << ", " << prop.may_spawn << ")" << std::endl;
-#endif
-  if (!should_check()) return;
-  MAAP_counts.push_back(MAAP_count);
-}
+void __csan_before_call(const csi_id_t call_id, const csi_id_t func_id,
+                        unsigned MAAP_count, const func_prop_t prop) {}
 
 CILKSAN_API
-void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id, unsigned MAAP_count, const func_prop_t prop) {
-#ifdef TRACE_CALLS
-  outs_red
-      << "[W" << worker_number() << "] after_call(feid=" << func_id
-      << ", fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
-#endif
-  if (!should_check()) return;
-  for (unsigned i = 0; i < MAAP_count; ++i)
-    MAAPs.pop();
-  MAAP_counts.pop();
-}
+void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id,
+                       unsigned MAAP_count, const func_prop_t prop) {}
 
  CILKSAN_API void __csan_func_entry(const csi_id_t func_id, __attribute__((noescape)) const void *bp, 
                                   __attribute__((noescape)) const void *sp, const func_prop_t prop) {
@@ -54,6 +32,7 @@ void __csan_after_call(const csi_id_t call_id, const csi_id_t func_id, unsigned 
   outs_red << "[W" << worker_number() << "] func_entry(fid=" << func_id << ", " << prop.may_spawn << ")" << std::endl;
 #endif
   if (!HAS_INIT) return;
+  tool_instance.register_frame((uintptr_t)bp, (uintptr_t)sp);
 }
 
 CILKSAN_API void __csan_func_exit(const csi_id_t func_exit_id, const csi_id_t func_id, const func_exit_prop_t prop) {
@@ -153,12 +132,16 @@ CILKSAN_API void __csan_large_store(const csi_id_t store_id, const void *addr,
 }
 
 CILKSAN_API void __csan_task(const csi_id_t task_id, const csi_id_t detach_id,
+                             __attribute__((noescape)) const void *bp,
+                             __attribute__((noescape)) const void *sp,
                              const task_prop_t prop) {
 #ifdef TRACE_CALLS
   outs_red
       << "[W" << worker_number() << "] task(tid=" << task_id << ", did="
       << detach_id << ", nsr=" << prop.num_sync_reg << ")" << std::endl;
 #endif
+  if (!HAS_INIT) return;
+  tool_instance.register_frame((uintptr_t)bp, (uintptr_t)sp);
 }
 
 CILKSAN_API
@@ -239,6 +222,8 @@ void __csan_before_allocfn(const csi_id_t allocfn_id, size_t size,
       << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty << ")"
       << std::endl;
 #endif
+  if (HAS_INIT && oldaddr)
+    tool_instance.register_realloc_begin((uintptr_t)oldaddr, allocfn_id);
 }
 
 CILKSAN_API
@@ -252,7 +237,12 @@ void __csan_after_allocfn(const csi_id_t allocfn_id, const void *addr,
       << alignment << ", oaddr=" << oldaddr << ", type=" << prop.allocfn_ty
       << ")" << std::endl;
 #endif
-  tool_instance.register_allocfn((uintptr_t) addr, size * num);
+  if (!HAS_INIT) return;
+  if (oldaddr)
+    tool_instance.register_realloc_end((uintptr_t)addr, size * num,
+                                       (uintptr_t)oldaddr);
+  else
+    tool_instance.register_allocfn((uintptr_t)addr, size * num);
 }
 
 CILKSAN_API
@@ -267,6 +257,33 @@ void __csan_alloc_strdup(const csi_id_t allocfn_id, const csi_id_t func_id,
   tool_instance.register_alloc_strdup((uintptr_t) result, str);
 }
 
+// Allocation functions that return their block another way; as in Cilksan,
+// clear the block.
+CILKSAN_API
+void __csan_alloc_strndup(const csi_id_t allocfn_id, const csi_id_t func_id,
+                          unsigned MAAP_count, const allocfn_prop_t prop,
+                          char *result, const char *str, size_t size) {
+  if (HAS_INIT && result)
+    tool_instance.register_allocfn((uintptr_t)result, strlen(result) + 1);
+}
+
+CILKSAN_API
+void __csan_alloc_posix_memalign(const csi_id_t allocfn_id,
+                                 const csi_id_t func_id, unsigned MAAP_count,
+                                 const allocfn_prop_t prop, int result,
+                                 void **ptr, size_t alignment, size_t size) {
+  if (HAS_INIT && result == 0)
+    tool_instance.register_allocfn((uintptr_t)*ptr, size);
+}
+
+CILKSAN_API
+void __csan_alloc_memalign(const csi_id_t allocfn_id, const csi_id_t func_id,
+                           unsigned MAAP_count, const allocfn_prop_t prop,
+                           char *result, size_t alignment, size_t size) {
+  if (HAS_INIT)
+    tool_instance.register_allocfn((uintptr_t)result, size);
+}
+
 CILKSAN_API
 void __csan_before_free(const csi_id_t free_id, const void *ptr,
                             const free_prop_t prop) {
@@ -275,7 +292,9 @@ void __csan_before_free(const csi_id_t free_id, const void *ptr,
       << "[W" << worker_number() << "] before_free(fid=" << free_id
       << ", addr=" << ptr << ", type=" << prop.free_ty << ")" << std::endl;
 #endif
-  tool_instance.register_free((uintptr_t) ptr);
+  // Before the free: once it returns, a parallel malloc can get the block.
+  if (HAS_INIT)
+    tool_instance.register_heap_free((uintptr_t)ptr, free_id, free_site_t::free);
 }
 
 CILKSAN_API
@@ -288,82 +307,33 @@ void __csan_after_free(const csi_id_t free_id, const void *ptr,
 #endif
 }
 
-CILKSAN_API void __csan_set_MAAP(MAAP_t val, csi_id_t id) {
-  if (!should_check())  
-    return; 
-#ifdef TRACE_CALLS
-  outs_red << "SET MAAP " << (int)val << ", " << id << std::endl;
-#endif
-  MAAPs.push_back(std::make_pair(id, val));
-}
-
-CILKSAN_API void __csan_get_MAAP(MAAP_t *ptr, csi_id_t id, unsigned idx) {
-#ifdef TRACE_CALLS
-  outs_red << "GET MAAP " << ptr << ", " << id << ", " << idx << std::endl;
-#endif
-  
-  // We presume that __csan_get_MAAP runs early in the function, so if
-  // instrumentation is disabled, it's disabled for the whole function.
-  if (!should_check()) {
-    *ptr = MAAP_t::NoAccess;
-    return;
-  }
-
-  unsigned MAAP_count = MAAP_counts.back();
-  if (idx >= MAAP_count) {
-    //outs_red << "No MAAP found: idx " << idx << " >= count " << MAAP_count << std::endl;
-    // The stack doesn't have MAAPs for us, so assume the worst: modref with
-    // aliasing.
-    *ptr = MAAP_t::ModRef;
-    return;
-  }
-
-  std::pair<csi_id_t, MAAP_t> MAAP = *MAAPs.ancestor(idx);
-  if (MAAP.first == id) {
-    //outs_red << "MAAP found: " << MAAP.second << std::endl;
-    *ptr = MAAP.second;
-  } else {
-    //outs_red << "NO MAAP found! " << std::endl;
-    // The stack doesn't have MAAPs for us, so assume the worst.
-    *ptr = MAAP_t::ModRef;
-  }
-}
-
 // This is what libhooks translates things in to
-void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
-                                    uintptr_t ptr, size_t len) {
+void check_read_bytes(csi_id_t call_id, uintptr_t ptr, size_t len) {
   if (!CHECKING) return;
 #ifdef TRACE_CALLS
   auto store = (const source_loc_t*) __csan_get_load_source_loc(call_id);
 
   outs_red << "CHECK READ ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
-  if (checkMAAP(MAAPVal, MAAP_t::Mod)) {
-    tool_instance.register_read((uint64_t)ptr, len, call_id);
-  }
+  tool_instance.register_read((uint64_t)ptr, len, call_id);
 }
-void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal,
-                                    const void *ptr, size_t len) {
-    check_read_bytes(call_id, MAAPVal, (uintptr_t) ptr, len);
+void check_read_bytes(csi_id_t call_id, const void *ptr, size_t len) {
+    check_read_bytes(call_id, (uintptr_t) ptr, len);
 }
 
 // Helper function for checking a function that writes len bytes starting at
 // ptr.
-void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
-                                     uintptr_t ptr, size_t len) {
+void check_write_bytes(csi_id_t call_id, uintptr_t ptr, size_t len) {
   if (!CHECKING) return;
 #ifdef TRACE_CALLS
   auto store = (const source_loc_t*) __csan_get_store_source_loc(call_id);
   outs_red << "CHECK WRITE ON (" << (store && store->name ? store->name : "null") << ", " << (store ? store->line_number : 0) << ")" << std::endl;
 #endif
-  if (checkMAAP(MAAPVal, MAAP_t::Ref)) {
-    tool_instance.register_write((uint64_t)ptr, len, call_id);
-  }
+  tool_instance.register_write((uint64_t)ptr, len, call_id);
 }
 
-void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal,
-                                     const void *ptr, size_t len) {
-    check_write_bytes(call_id, MAAPVal, (uintptr_t) ptr, len);
+void check_write_bytes(csi_id_t call_id, const void *ptr, size_t len) {
+    check_write_bytes(call_id, (uintptr_t) ptr, len);
 }
 
 

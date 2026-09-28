@@ -55,7 +55,7 @@ append_list_if(CILKTOOLS_HAS_FDEBUG_DEFAULT_VERSION_EQ_4_FLAG
   -fdebug-default-version=4 CILKPRACE_CFLAGS)
 append_rtti_flag(OFF CILKPRACE_CFLAGS)
 
-set(CILKPRACE_GRANULARITY "8" CACHE STRING "Shadow memory granularity in bytes (4 or 8)")
+set(CILKPRACE_GRANULARITY "4" CACHE STRING "Shadow memory granularity in bytes (4 or 8)")
 set_property(CACHE CILKPRACE_GRANULARITY PROPERTY STRINGS "4" "8")
 
 set(CILKPRACE_COMMON_DEFINITIONS)

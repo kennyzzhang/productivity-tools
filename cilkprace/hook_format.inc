@@ -18,27 +18,8 @@
 #define CHECK_GT(n, v) cilksan_assert(n > 0)
 #define CHECK_EQ(n, v) cilksan_assert(n == v)
 
-#define CHECK_READ_RANGE(ptr, size)                                            \
-  if (MAAP_count > 0) {                                                        \
-    check_read_bytes(call_id, MAAPs.back().second, ptr, size);                 \
-    MAAPs.pop();                                                               \
-    --MAAP_count;                                                              \
-  } else {                                                                     \
-    check_read_bytes(call_id, MAAP_t::ModRef, ptr, size);                      \
-  }                                                                            \
-  do {                                                                         \
-  } while (0)
-
-#define CHECK_WRITE_RANGE(ptr, size)                                           \
-  if (MAAP_count > 0) {                                                        \
-    check_write_bytes(call_id, MAAPs.back().second, ptr, size);                \
-    MAAPs.pop();                                                               \
-    --MAAP_count;                                                              \
-  } else {                                                                     \
-    check_write_bytes(call_id, MAAP_t::ModRef, ptr, size);                     \
-  }                                                                            \
-  do {                                                                         \
-  } while (0)
+#define CHECK_READ_RANGE(ptr, size) check_read_bytes(call_id, ptr, size)
+#define CHECK_WRITE_RANGE(ptr, size) check_write_bytes(call_id, ptr, size)
 
 static const char *parse_number(const char *p, int *out) {
   *out = atoll(p);
@@ -323,7 +304,7 @@ static int scanf_get_value_size(ScanfDirective *dir) {
 // Common part of *scanf interceptors.
 // Process format string and va_list, and report all store ranges.
 // Stops when "consuming" n_inputs input items.
-static void scanf_common(csi_id_t call_id, unsigned &MAAP_count, int n_inputs,
+static void scanf_common(csi_id_t call_id, int n_inputs,
                          bool allowGnuMalloc, const char *format, va_list aq) {
   CHECK_GT(n_inputs, 0);
   const char *p = format;
@@ -510,16 +491,11 @@ static int printf_get_value_size(PrintfDirective *dir) {
         return;                                                                \
       }                                                                        \
     }                                                                          \
-    if (convSpecifier == 'p' && MAAP_count > 0) {                              \
-      MAAPs.pop();                                                             \
-      --MAAP_count;                                                            \
-    }                                                                          \
   } while (0)
 
 // Common part of *printf interceptors.
 // Process format string and va_list, and report all load ranges.
-static void printf_common(csi_id_t call_id, unsigned &MAAP_count,
-                          const char *format, va_list aq) {
+static void printf_common(csi_id_t call_id, const char *format, va_list aq) {
   CHECK_READ_RANGE(format, strlen(format) + 1);
 
   const char *p = format;

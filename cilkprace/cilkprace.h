@@ -17,11 +17,10 @@
 #include <cstring>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <mutex>
 
 #include <shadowmem_reservevm.h>
 #include <shadowmem_pagetable.h>
-
-#include "stack.h"
 
 #define TRACE_CALLS 1
 #undef TRACE_CALLS
@@ -36,40 +35,40 @@ extern __attribute__((visibility("default"))) bool HAS_INIT;
 extern __attribute__((visibility("default"))) bool CHECKING;
 extern __attribute__((visibility("default"))) int CHECKING_DISABLED;
 
-// Stack structures for keeping track of MAAP (May Access Alias in Parallel)
-// information inserted by the compiler before a call.
-enum class MAAP_t : uint8_t {
-  NoAccess = 0,
-  Mod = 1,
-  Ref = 2,
-  ModRef = Mod | Ref,
-  NoAlias = 4,
-};
-static_assert(sizeof(MAAP_t) == 1, "MAAP_t must be 1 byte");
-
-using MAAPstack = Stack_t<std::pair<csi_id_t, MAAP_t>>;
-using ustack = Stack_t<unsigned>;
-using pstack = Stack_t<uint8_t>;
-
-// Reducer functions for keeping track of MAAPs
-void init_MAAPstack(void *view);
-void reduce_MAAPstack(void *left_view, void *right_view);
-typedef MAAPstack cilk_reducer(init_MAAPstack,
-                               reduce_MAAPstack) MAAPstack_reducer;
-
-void init_ustack(void *view);
-void reduce_ustack(void *left_view, void *right_view);
-typedef ustack cilk_reducer(init_ustack, reduce_ustack) ustack_reducer;
-
-extern __attribute__((visibility("default"))) MAAPstack_reducer MAAPs;
-extern __attribute__((visibility("default"))) ustack_reducer MAAP_counts;
-
 #ifndef CILKPRACE_GRANULARITY
-#define CILKPRACE_GRANULARITY 8
+#define CILKPRACE_GRANULARITY 4
 #endif
+
+// Sizes of live heap blocks, for frees and reallocs. Cilksan keeps the same
+// map; this one is sharded under locks because hooks run in parallel. Each
+// shard is an open-addressing table (no STL: the hooks are inlined into the
+// program as bitcode). See cilkprace.cpp.
+class heap_sizes_t {
+  static constexpr unsigned NSHARDS = 64;
+  struct alignas(64) shard_t {
+    std::mutex lock;
+    uintptr_t *keys = nullptr;  // 0: empty, 1: removed
+    size_t *sizes = nullptr;
+    size_t cap = 0, used = 0;   // used counts removed slots too
+  } shards[NSHARDS];
+  static shard_t &grow(shard_t &s);
+
+public:
+  void insert(uintptr_t addr, size_t size);
+  // Removes addr's entry; returns false if there is none.
+  bool remove(uintptr_t addr, size_t &size);
+};
+
+// The hook that freed a block, for the race report: its label, and which
+// source-location table its id indexes. The *_call sites are library-call
+// hooks, which the compiler uses when it doesn't recognize malloc and free as
+// allocation functions (at -O0).
+enum class free_site_t { free, realloc, free_call, realloc_call };
 
 class CilkpraceImpl_t {
   shadowmem_reservevm<shadow_label, CILKPRACE_GRANULARITY> shadow_mem;
+  // Never destroyed: frees keep coming during exit.
+  heap_sizes_t &heap_sizes = *new heap_sizes_t;
 
 // Assuming shadow_label is 2^10 bytes, pointers are 2^3 bytes,
 // and virtual addresses are 48 bits.
@@ -117,7 +116,20 @@ public:
 
   void register_alloc_strdup(uintptr_t addr, const char *str);
 
-  void register_free(uintptr_t addr);
+  // Heap and stack semantics follow Cilksan's (see cilkprace.cpp).
+  void register_frame(uintptr_t bp, uintptr_t sp);
+
+  void register_free(uintptr_t beg, size_t num_bytes, csi_id_t free_id,
+                     free_site_t site);
+
+  void register_heap_free(uintptr_t addr, csi_id_t free_id, free_site_t site);
+
+  void register_realloc_begin(uintptr_t oldaddr, csi_id_t allocfn_id);
+
+  void register_realloc_end(uintptr_t addr, size_t new_size,
+                            uintptr_t oldaddr);
+
+  void report_free_race(uintptr_t addr, csi_id_t free_id, free_site_t site);
 
   void advance_stack_frame(uintptr_t addr);
   void restore_stack(const csi_id_t call_id, uintptr_t addr);
@@ -130,13 +142,9 @@ extern __attribute__((visibility("default"))) CilkpraceImpl_t tool_instance;
   return HAS_INIT;
 }
 
-void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal, uintptr_t ptr,
-                      size_t len);
-void check_read_bytes(csi_id_t call_id, MAAP_t MAAPVal, const void *ptr,
-                      size_t len);
-void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal, uintptr_t ptr,
-                       size_t len);
-void check_write_bytes(csi_id_t call_id, MAAP_t MAAPVal, const void *ptr,
-                       size_t len);
+void check_read_bytes(csi_id_t call_id, uintptr_t ptr, size_t len);
+void check_read_bytes(csi_id_t call_id, const void *ptr, size_t len);
+void check_write_bytes(csi_id_t call_id, uintptr_t ptr, size_t len);
+void check_write_bytes(csi_id_t call_id, const void *ptr, size_t len);
 
 #pragma GCC visibility pop
