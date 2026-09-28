@@ -4,12 +4,10 @@
 
 #include "addrmap.h"
 #include "csan.h"
-#include "dictionary.h"
-#include "disjointset.h"
 #include "frame_data.h"
 #include "hypertable.h"
 #include "locksets.h"
-#include "shadow_mem_allocator.h"
+#include "race_info.h"
 #include "stack.h"
 #include <cilk/reducer>
 #include <cstdio>
@@ -30,20 +28,6 @@ public:
     CILKSAN_INITIALIZED = true;
   }
   ~CilkSanImpl_t();
-
-  MALineAllocator &getMALineAllocator(unsigned Idx) {
-    return MAAlloc[Idx];
-  }
-
-  using DSAllocator = DisjointSet_t<call_stack_t>::DSAllocator;
-  DSAllocator &getDSAllocator() {
-    return DSAlloc;
-  }
-
-  using DSList_t = DisjointSet_t<call_stack_t>::List_t;
-  DSList_t &getDSList() {
-    return DSList;
-  }
 
   // Initialization
   void init();
@@ -115,11 +99,6 @@ public:
     // If this is a loop frame, assume we're not locally synced.
     if (isLoopFrame(f->frame_data))
       return false;
-    // Otherwise check if this frame has nonempty P-bags.
-    if (f->Pbags)
-      for (unsigned i = 0; i < f->num_Pbags; ++i)
-        if (f->Pbags[i])
-          return false;
     return true;
   }
 
@@ -377,15 +356,6 @@ private:
   // Shadow memory, which maps a memory address to its last reader and writer
   // and allocation.
   SimpleShadowMem *shadow_memory = nullptr;
-
-  // Use separate allocators for each dictionary in the shadow memory.
-  MALineAllocator MAAlloc[3];
-
-  // Allocator for disjoint sets
-  DSAllocator DSAlloc;
-
-  // Helper list for disjoint sets
-  DSList_t DSList;
 
   // A map keeping track of races found, keyed by the larger instruction address
   // involved in the race.  Races that have same instructions that made the same
