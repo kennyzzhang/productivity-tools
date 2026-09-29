@@ -2,6 +2,7 @@ build
 build-ablate
 build-compare
 build-prof
+build-compare-g1
 ablation-results
 
 *.out
