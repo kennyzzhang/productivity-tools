@@ -338,20 +338,20 @@ static T *Unsorted, *Expected, *Actual;
 
 typedef void (*Sort)(T *, T *);
 
-// Times M sorts of fresh copies of the input; returns milliseconds.
+// Times M sorts of fresh copies of the input; returns nanoseconds.
 static unsigned long long time_sort(Sort sort, const char *what) {
   std::copy(Unsorted, Unsorted + M * N, Actual);
   timer_start();
   for (size_t i = 0; i < M; ++i)
     sort(Actual + i * N, Actual + (i + 1) * N);
-  unsigned long long ms = timer_stop_ms();
+  unsigned long long ns = timer_stop_ns();
   for (size_t k = 0; k < M * N; ++k) {
     if (Actual[k] != Expected[k]) {
       fprintf(stderr, "spp_sort: wrong result for %s\n", what);
       exit(1);
     }
   }
-  return ms;
+  return ns;
 }
 
 int main(int argc, char *argv[]) {
@@ -376,12 +376,12 @@ int main(int argc, char *argv[]) {
   }
 
   for (int it = 0; it < iters; ++it) {
-    unsigned long long ms = 0;
-    ms += time_sort(Ex1::parallel_quicksort, "quicksort recursive");
-    ms += time_sort(Ex2::parallel_quicksort, "quicksort semi-recursive");
-    ms += time_sort(Ex3::sort, "mergesort");
-    ms += time_sort(Ex4::parallel_sample_sort, "samplesort");
-    record_time(ms);
+    unsigned long long ns = 0;
+    ns += time_sort(Ex1::parallel_quicksort, "quicksort recursive");
+    ns += time_sort(Ex2::parallel_quicksort, "quicksort semi-recursive");
+    ns += time_sort(Ex3::sort, "mergesort");
+    ns += time_sort(Ex4::parallel_sample_sort, "samplesort");
+    record_time(ns);
   }
   report_time();
   delete[] Unsorted;

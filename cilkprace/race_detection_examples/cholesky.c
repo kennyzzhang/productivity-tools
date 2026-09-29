@@ -891,7 +891,7 @@ int main(int argc, char *argv[]) {
 
     timer_start();
     R = cholesky(depth, R);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
 
     if (iter < iterations - 1) {
       free_matrix(depth, R);

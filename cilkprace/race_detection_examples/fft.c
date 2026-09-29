@@ -3262,7 +3262,7 @@ void test_speed(long size, int iterations) {
 
     timer_start();
     cilk_fft(size, in, out);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   report_time();

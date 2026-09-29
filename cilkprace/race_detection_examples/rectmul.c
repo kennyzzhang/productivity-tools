@@ -420,7 +420,7 @@ int run(long x, long y, long z, int check, int iterations) {
 
     timer_start();
     long long flops = multiply_matrix(A, y, B, z, x, y, z, R, z, 0);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   report_time();

@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
     total = 0; // Reset for each iteration
     timer_start();
     fib(n, total);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   result = total;

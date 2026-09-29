@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
     timer_start();
     for (int r = 0; r < reps; ++r)
       karatsuba(z, x, y, n);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   // Check against the quadratic algorithm.

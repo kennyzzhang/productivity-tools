@@ -20,7 +20,6 @@ Usage:
 import argparse
 import csv
 import math
-import statistics
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -29,7 +28,10 @@ BASELINE = "baseline"
 
 
 def load(path):
-    """-> {(config, benchmark, workers): median_seconds}, plus notes."""
+    """-> {(config, benchmark, workers): min_seconds}, plus notes.
+
+    The benchmarks are deterministic, so run-to-run variation is additive
+    noise and the minimum is the best estimate."""
     runs = defaultdict(list)
     notes = defaultdict(set)
     with open(path, newline="") as fh:
@@ -39,7 +41,7 @@ def load(path):
                 runs[key].append(float(row["seconds"]))
             elif row["note"]:
                 notes[key].add(row["note"])
-    return {k: statistics.median(v) for k, v in runs.items()}, notes
+    return {k: min(v) for k, v in runs.items()}, notes
 
 
 def geomean(xs):

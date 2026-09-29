@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
   for (int iter = 0; iter < iterations; iter++) {
     timer_start();
     result = fib(n);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   report_time();

@@ -6,13 +6,11 @@ race_detection_examples build directory.
 Each target's time is saved to a file like:
     <build_dir>/<test>.<variant>.time
 
-which contains the output of bash's `time` builtin, e.g.:
-    real    0m5.123s
-    user    1m23.456s
-    sys     0m0.789s
+which holds the benchmark's own timed-region time in seconds (the minimum over
+its -i iterations), e.g. `5.123000`. It is empty if the run printed no time.
 
 Usage:
-    python3 plot_time.py [--build-dir PATH] [--metric real|user|sys]
+    python3 plot_time.py [--build-dir PATH]
                          [--output FILE] [--variants v1,v2,...] [--tests t1,t2,...]
                          [--no-plot]
 """
@@ -31,7 +29,6 @@ try:
 except ImportError:
     HAS_MPL = False
 
-_TIME_RE = re.compile(r"(?P<metric>real|user|sys)\s+(?P<min>\d+)m(?P<sec>[\d.]+)s")
 
 VARIANT_COLORS = {
     "nocilk":         "#4c7bba",
@@ -71,15 +68,10 @@ DEFAULT_SKIP_TESTS = {
 
 
 def parse_time_file(path):
-    times = {}
     try:
-        text = path.read_text()
-    except OSError:
-        return times
-    for m in _TIME_RE.finditer(text):
-        secs = int(m.group("min")) * 60 + float(m.group("sec"))
-        times[m.group("metric")] = secs
-    return times
+        return float(path.read_text())
+    except (OSError, ValueError):
+        return None
 
 
 def collect_results(build_dir):
@@ -90,14 +82,14 @@ def collect_results(build_dir):
         if not m:
             continue
         test, variant = m.group(1), m.group(2)
-        times = parse_time_file(f)
-        if not times:
+        secs = parse_time_file(f)
+        if secs is None:
             continue
-        results.setdefault(test, {})[variant] = times
+        results.setdefault(test, {})[variant] = secs
     return results
 
 
-def print_table(results, metric, variants):
+def print_table(results, variants):
     tests = sorted(results)
     if not tests:
         print("No .time files found.")
@@ -111,7 +103,7 @@ def print_table(results, metric, variants):
     for test in tests:
         row = f"{test:<18}"
         for v in variants:
-            val = results[test].get(v, {}).get(metric)
+            val = results[test].get(v)
             if val is not None:
                 row += f"{val:>{col_w-1}.2f}s"
             else:
@@ -119,7 +111,7 @@ def print_table(results, metric, variants):
         print(row)
 
 
-def plot(results, metric, variants, output_path):
+def plot(results, variants, output_path):
     if not HAS_MPL:
         print("matplotlib not found -- install it with: pip install matplotlib numpy",
               file=sys.stderr)
@@ -141,7 +133,7 @@ def plot(results, metric, variants, output_path):
 
     for i, variant in enumerate(variants):
         values = [
-            results[test].get(variant, {}).get(metric, float("nan"))
+            results[test].get(variant, float("nan"))
             for test in tests
         ]
         offset = (i - n_vars / 2 + 0.5) * bar_width
@@ -157,11 +149,7 @@ def plot(results, metric, variants, output_path):
                         ha="center", va="bottom",
                         fontsize=6.5, color="white", alpha=0.85)
 
-    metric_label = {
-        "real": "Wall-clock time (s)",
-        "user": "User CPU time (s)",
-        "sys":  "Sys CPU time (s)",
-    }.get(metric, f"{metric} time (s)")
+    metric_label = "Timed-region time (s)"
 
     ax.set_xticks(x)
     ax.set_xticklabels(tests, color="white", fontsize=9, rotation=20, ha="right")
@@ -190,8 +178,6 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--build-dir", default=str(default_build), metavar="PATH",
                         help=f"Build directory with *.time files (default: {default_build})")
-    parser.add_argument("--metric", choices=["real", "user", "sys"], default="real",
-                        help="Time metric to plot (default: real)")
     parser.add_argument("--output", default="benchmark_plot.png", metavar="FILE",
                         help="Output image file (default: benchmark_plot.png)")
     parser.add_argument("--variants", metavar="v1,v2,...",
@@ -228,9 +214,9 @@ def main():
     else:
         variants = [v for v in canonical if v in found_variants]
 
-    print_table(results, args.metric, variants)
+    print_table(results, variants)
     if not args.no_plot:
-        plot(results, args.metric, variants, args.output)
+        plot(results, variants, args.output)
 
 
 if __name__ == "__main__":

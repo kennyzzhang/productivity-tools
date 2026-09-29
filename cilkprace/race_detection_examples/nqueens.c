@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
   for (int iter = 0; iter < iterations; iter++) {
     timer_start();
     res = nqueens(n, 0, a);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   report_time();

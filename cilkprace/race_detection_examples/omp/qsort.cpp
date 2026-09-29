@@ -80,7 +80,7 @@ int qmain(int n) {
   {
     timer_start();
     sample_qsort(a, a + n);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   // Confirm that a is sorted and that each element contains the index.

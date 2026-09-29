@@ -826,7 +826,7 @@ int main(int argc, char *argv[]) {
   for (int iter = 0; iter < iterations; iter++) {
     timer_start();
     strassen(n, A, n, B, n, C, n);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   report_time();

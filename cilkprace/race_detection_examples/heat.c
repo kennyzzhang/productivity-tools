@@ -210,7 +210,7 @@ int heat(int iterations) {
       t = tu + c * dt;
       l = divide(0, nx, neww, old, COMP, c);
     }
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   report_time();

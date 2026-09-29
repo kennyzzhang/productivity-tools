@@ -495,7 +495,7 @@ int main(int argc, char *argv[]) {
 
     timer_start();
     lu(M, nBlocks);
-    record_time(timer_stop_ms());
+    record_time(timer_stop_ns());
   }
 
   report_time();

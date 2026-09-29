@@ -252,9 +252,13 @@ foreach(variant IN LISTS variants)
   add_custom_target(${variant}.time)
 endforeach()
 
+# Each benchmark times only its own timed region (timing.h) and prints the
+# minimum over its -i iterations as the last number-only line of stdout; that
+# number, in seconds, is what goes in the .time file. The file is empty when
+# the program printed no time (e.g. cilkprace stopped at a race).
 function(add_to_meta_targets target test variant)
   add_custom_target(${target}.time
-    COMMAND bash -c "(time ${CMAKE_CURRENT_BINARY_DIR}/${target} -i 5 &> /dev/null) 2> ${CMAKE_CURRENT_BINARY_DIR}/${target}.time"
+    COMMAND bash -c "${CMAKE_CURRENT_BINARY_DIR}/${target} -i 5 2> /dev/null | awk '/^[[:space:]]*[0-9]+([.][0-9]+)?[[:space:]]*$/ { t = $1 } END { print t }' > ${CMAKE_CURRENT_BINARY_DIR}/${target}.time"
     DEPENDS ${target}
     COMMENT "Timing ${target}"
     VERBATIM
