@@ -64,14 +64,15 @@ void sample_qsort(int * begin, int * end) {
 
 
 // A simple test harness 
-int qmain(int n) {
+// seed < 0: a different random input every call.
+int qmain(int n, int seed) {
 
   int* a = new int[n];
 
   for (int i = 0; i < n; ++i)
     a[i] = i;
   std::random_device rd;
-  std::mt19937 g(rd());
+  std::mt19937 g(seed < 0 ? rd() : unsigned(seed));
   std::shuffle(a, a + n, g);
 
   std::cerr << "Sorting " << n << " integers" << std::endl;
@@ -100,22 +101,24 @@ int qmain(int n) {
 int main(int argc, char* argv[]) {
 
   int n = 10 * 1000 * 1000;
-  const char *specifiers[] = {"-n", "-i", 0};
-  int opt_types[] = {INTARG, INTARG, 0};
+  // -s SEED: sort the same input every iteration, for timing.
+  const char *specifiers[] = {"-n", "-i", "-s", 0};
+  int opt_types[] = {INTARG, INTARG, INTARG, 0};
   int iterations = 1;
+  int seed = -1;
 
-  get_options(argc, argv, specifiers, opt_types, &n, &iterations);
+  get_options(argc, argv, specifiers, opt_types, &n, &iterations, &seed);
 
   if (n <= 0) {
     std::cerr << "Invalid argument" << std::endl;
-    std::cerr << "Usage: qsort N" << std::endl;
+    std::cerr << "Usage: qsort [-n N] [-i ITERATIONS] [-s SEED]" << std::endl;
     std::cerr << "       N = number of elements to sort" << std::endl;
     return 1;
   }
 
   int ret = 0;
   for (int iter = 0; iter < iterations; iter++) {
-    ret = qmain(n);
+    ret = qmain(n, seed);
     if (ret != 0) break;
   }
 
