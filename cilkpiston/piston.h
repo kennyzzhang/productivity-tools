@@ -53,10 +53,12 @@ public:
 
     friend class piston_t;
   };
-private:
 
+private:
   unsigned lastblock_subidx;
   std::list<leftblock_t> leftblocks;
+  idx_t lastblockidx;
+  val_t lastblocksmq;
   std::vector<std::list<leftblock_t>::iterator> to_update;
   std::array<val_t, 65> rightblockmins;
 
@@ -64,6 +66,8 @@ private:
   // assert(std::advance(leftblocks.begin(), i)->blockidx == i); // will change when garbage collection is implemented
   // assert(std::prev(leftblocks.end()).blockidx - to_update[i].blockidx) == 1 << i); // will change when garbage collection is implemented
   // assert(rightblockmin(64) == INFTY);
+  // assert(lastblockidx == std::prev(leftblocks.end())->blockidx);
+  // assert(lastblocksmq == std::prev(leftblocks.end())->smq(0));
 
   val_t& rightblockmin(int idx) {
     return const_cast<val_t&>(rightblockmin_const(idx));
@@ -86,9 +90,10 @@ private:
     lastblock_subidx = 0;
     // TODO: inherit this value of lastblock from append_inc/dec?
     const auto& lastblock = *std::prev(leftblocks.end());
-    idx_t new_blockidx = lastblock.blockidx + 1;
+    lastblockidx++;
+    lastblocksmq = lastblock.endval;
     leftblocks.push_back((struct leftblock_t){
-      .blockidx = new_blockidx,
+      .blockidx = lastblockidx,
       .smqbitarray = 0,
       .endval = lastblock.endval,
       .blockmin = INFTY,
@@ -102,7 +107,7 @@ private:
       to_update[i]++;
     }
 
-    if ((new_blockidx & new_blockidx - 1) == 0) {
+    if ((lastblockidx & lastblockidx - 1) == 0) {
       to_update.push_back(leftblocks.begin());
     }
   }
@@ -113,7 +118,10 @@ public:
       .smqbitarray = 0,
       .endval = 0,
       .blockmin = INFTY,
-      }}), to_update() {
+      }}),
+    lastblockidx(0),
+    lastblocksmq(0),
+    to_update() {
     std::fill(rightblockmins.begin(), rightblockmins.end(), INFTY);
   }
 
@@ -122,6 +130,7 @@ public:
     auto& lastblock = *std::prev(leftblocks.end());
     lastblock.smqbitarray |= 1ull << (block_bits - 1 - lastblock_subidx);
     lastblock.endval++;
+    lastblocksmq = lastblock.smq(0);
     if (++lastblock_subidx >= block_bits) {
       extend_leftblocks();
     }
@@ -132,6 +141,7 @@ public:
     auto& lastblock = *std::prev(leftblocks.end());
     lastblock.smqbitarray &= lastblock.smqbitarray - 1;
     lastblock.endval--;
+    lastblocksmq = lastblock.smq(0);
     if (++lastblock_subidx < block_bits) {
       extend_leftblocks();
     }
@@ -169,29 +179,30 @@ public:
 //#pragma clang attribute push (__attribute__((target("bmi2"))), apply_to=function)
 // Uses bzhi/shlx. ~8.9s
 
+#pragma clang attribute push (__attribute__((target("sse4,lzcnt,bmi2"))), apply_to=function)
+// Uses popcnt. ~2.9s
 __attribute__((noinline)) piston_t::val_t piston_t::rmq(iterator beg) const {
   const leftblock_t& leftblock = *beg.get_block_it();
   unsigned subidx = beg.get_subidx();
 
   val_t ret = INFTY;
 
-  ret = std::min(ret, leftblock.smq(subidx));
-
   ret = std::min(ret, leftblock.blockmin);
 
-  // TODO: consider if we should maintain a cached value of lastblock?
-  auto& lastblock = *std::prev(leftblocks.end());
+  ret = std::min(ret, leftblock.smq(subidx));
 
-  idx_t blockidx_diff = lastblock.blockidx - leftblock.blockidx;
-  // TODO: branchless? Can just min with lastblock.smq(63) for noop
-  if (blockidx_diff) {
-    ret = std::min(ret, lastblock.smq(0));
-  }
+  idx_t blockidx_diff = lastblockidx - leftblock.blockidx;
+
 
   ret = std::min(ret, rightblockmin_from_diff(blockidx_diff));
 
+  if (blockidx_diff) {
+    ret = std::min(ret, lastblocksmq);
+  }
+
   return ret;
 }
+#pragma clang attribute pop
 
 std::ostream& operator<<(std::ostream& os, const piston_t::leftblock_t& x) {
   os << x.blockidx << ":" << std::hex << x.smqbitarray << ", " << x.endval << ", " << x.blockmin;
