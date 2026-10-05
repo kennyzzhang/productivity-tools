@@ -140,7 +140,7 @@ public:
     lastblock.smqbitarray &= lastblock.smqbitarray - 1;
     lastblock.endval--;
     lastblocksmq = lastblock.smq(0);
-    if (++lastblock_subidx < block_bits) {
+    if (++lastblock_subidx >= block_bits) {
       extend_leftblocks();
     }
   }
