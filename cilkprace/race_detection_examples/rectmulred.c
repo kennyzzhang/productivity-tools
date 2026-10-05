@@ -243,7 +243,8 @@ void check_block(block *R, DTYPE v, int *errorf) {
       error++;
     }
 
-  *errorf = 1;
+  if (error)
+    *errorf = 1;
 }
 
 int compare_block(block *R, block *B) {
