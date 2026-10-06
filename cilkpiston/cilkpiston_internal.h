@@ -4,12 +4,11 @@
 
 #include "addrmap.h"
 #include "csan.h"
-#include "dictionary.h"
-#include "disjointset.h"
 #include "frame_data.h"
 #include "hypertable.h"
 #include "locksets.h"
-#include "shadow_mem_allocator.h"
+#include "piston.h"
+#include "race_info.h"
 #include "stack.h"
 #include <cilk/reducer>
 #include <cstdio>
@@ -21,7 +20,7 @@ using cilk::reducer_callbacks;
 extern bool CILKSAN_INITIALIZED;
 
 // Forward declarations
-class SimpleShadowMem;
+class PistonShadowMem;
 
 // Top-level class implementing the tool.
 class CilkSanImpl_t {
@@ -30,20 +29,6 @@ public:
     CILKSAN_INITIALIZED = true;
   }
   ~CilkSanImpl_t();
-
-  MALineAllocator &getMALineAllocator(unsigned Idx) {
-    return MAAlloc[Idx];
-  }
-
-  using DSAllocator = DisjointSet_t<call_stack_t>::DSAllocator;
-  DSAllocator &getDSAllocator() {
-    return DSAlloc;
-  }
-
-  using DSList_t = DisjointSet_t<call_stack_t>::List_t;
-  DSList_t &getDSList() {
-    return DSList;
-  }
 
   // Initialization
   void init();
@@ -115,11 +100,10 @@ public:
     // If this is a loop frame, assume we're not locally synced.
     if (isLoopFrame(f->frame_data))
       return false;
-    // Otherwise check if this frame has nonempty P-bags.
-    if (f->Pbags)
-      for (unsigned i = 0; i < f->num_Pbags; ++i)
-        if (f->Pbags[i])
-          return false;
+    // Otherwise check if this frame has spawns that have not been synced.
+    for (unsigned i = 0; i < FrameData_t::MAX_SYNC_REG; ++i)
+      if (f->sync_base[i] >= 0)
+        return false;
     return true;
   }
 
@@ -246,6 +230,7 @@ public:
   void do_enter(unsigned num_sync_reg);
   void do_enter_helper(unsigned num_sync_reg);
   void do_detach();
+  void do_spawn_prepare(unsigned sync_reg);
   void do_detach_continue(unsigned sync_reg);
   void do_loop_begin() { start_new_loop = true; }
   void do_loop_iteration_begin(unsigned num_sync_reg);
@@ -339,6 +324,9 @@ private:
   template <bool is_read, MAType_t type>
   inline void record_mem_helper(const csi_id_t acc_id, uintptr_t addr,
                                 size_t mem_size, unsigned alignment);
+  template <bool is_read>
+  inline void check_and_update(const csi_id_t acc_id, MAType_t type,
+                               uintptr_t addr, size_t mem_size);
   template <bool is_read, MAType_t type>
   inline void record_locked_mem_helper(const csi_id_t acc_id, uintptr_t addr,
                                        size_t mem_size, unsigned alignment);
@@ -374,18 +362,31 @@ private:
   bool lockset_empty = true;
   LockSet_t lockset;
 
-  // Shadow memory, which maps a memory address to its last reader and writer
-  // and allocation.
-  SimpleShadowMem *shadow_memory = nullptr;
+  // Shadow memory, which maps a memory address to its last reader and writer.
+  PistonShadowMem *shadow_memory = nullptr;
 
-  // Use separate allocators for each dictionary in the shadow memory.
-  MALineAllocator MAAlloc[3];
+  // PISTON: the depths of the Euler tour of the SP-tree so far.  S nodes sit
+  // at even depths and P nodes at odd depths, so an earlier access is
+  // logically parallel with the current strand iff the minimum depth since
+  // that access is odd.
+  piston_t piston;
+  int32_t depth = 0;
 
-  // Allocator for disjoint sets
-  DSAllocator DSAlloc;
-
-  // Helper list for disjoint sets
-  DSList_t DSList;
+  inline void step_in() {
+    piston.append_inc();
+    ++depth;
+  }
+  inline void step_out() {
+    piston.append_dec();
+    --depth;
+  }
+  inline void unwind_to(int32_t target) {
+    while (depth > target)
+      step_out();
+  }
+  inline bool parallel_with_current(piston_t::iterator pos) const {
+    return piston.rmq(pos) & 1;
+  }
 
   // A map keeping track of races found, keyed by the larger instruction address
   // involved in the race.  Races that have same instructions that made the same

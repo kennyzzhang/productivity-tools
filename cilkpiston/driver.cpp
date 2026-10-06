@@ -242,7 +242,6 @@ CILKSAN_API void __csan_func_entry(const csi_id_t func_id,
                                    __attribute__((noescape)) const void *bp,
                                    __attribute__((noescape)) const void *sp,
                                    const func_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -316,7 +315,6 @@ CILKSAN_API void __csan_func_entry(const csi_id_t func_id,
 CILKSAN_API void __csan_func_exit(const csi_id_t func_exit_id,
                                   const csi_id_t func_id,
                                   const func_exit_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -358,7 +356,6 @@ CILKSAN_API void __csan_func_exit(const csi_id_t func_exit_id,
 CILKSAN_API void __csan_before_loop(const csi_id_t loop_id,
                                     const int64_t trip_count,
                                     const loop_prop_t prop) {
-  return; //TODO: [kzz]
   if (!prop.is_tapir_loop)
     return;
 
@@ -388,7 +385,6 @@ CILKSAN_API void __csan_before_loop(const csi_id_t loop_id,
 CILKSAN_API void __csan_after_loop(const csi_id_t loop_id,
                                    const unsigned sync_reg,
                                    const loop_prop_t prop) {
-  return; //TODO: [kzz]
   if (!prop.is_tapir_loop)
     return;
 
@@ -411,7 +407,6 @@ CILKSAN_API void __csan_after_loop(const csi_id_t loop_id,
 CILKSAN_API void __csan_before_call(const csi_id_t call_id,
                                     const csi_id_t func_id, unsigned MAAP_count,
                                     const call_prop_t prop) {
-  return; //TODO: [kzz]
   if (!should_check())
     return;
 
@@ -435,7 +430,6 @@ CILKSAN_API void __csan_after_call(const csi_id_t call_id,
                                    const csi_id_t func_id,
                                    unsigned MAAP_count,
                                    const call_prop_t prop) {
-  return; //TODO: [kzz]
   if (!should_check())
     return;
 
@@ -460,7 +454,6 @@ CILKSAN_API void __csan_after_call(const csi_id_t call_id,
 CILKSAN_API __attribute__((noinline)) void
 __csan_detach(const csi_id_t detach_id, const unsigned sync_reg,
               const detach_prop_t prop) {
-  return; //TODO: [kzz]
   if (!should_check())
     return;
 
@@ -476,9 +469,11 @@ __csan_detach(const csi_id_t detach_id, const unsigned sync_reg,
   // this notes the change of peer sets.
   parallel_execution.back() = 1;
 
-  if (!prop.for_tapir_loop_body)
+  if (!prop.for_tapir_loop_body) {
     // Push the detach onto the call stack.
     CilkSanImpl.record_call(detach_id, SPAWN);
+    CilkSanImpl.do_spawn_prepare(sync_reg);
+  }
 }
 
 // Hook called upon entering the body of a task.
@@ -490,7 +485,6 @@ CILKSAN_API __attribute__((noinline)) void
 __csan_task(const csi_id_t task_id, const csi_id_t detach_id,
             __attribute__((noescape)) const void *bp,
             __attribute__((noescape)) const void *sp, const task_prop_t prop) {
-  return; //TODO: [kzz]
   if (!should_check())
     return;
 
@@ -544,7 +538,6 @@ CILKSAN_API __attribute__((noinline)) void
 __csan_task_exit(const csi_id_t task_exit_id, const csi_id_t task_id,
                  const csi_id_t detach_id, const unsigned sync_reg,
                  const task_exit_prop_t prop) {
-  return; //TODO: [kzz]
   if (!should_check())
     return;
 
@@ -584,7 +577,6 @@ CILKSAN_API __attribute__((noinline)) void
 __csan_detach_continue(const csi_id_t detach_continue_id,
                        const csi_id_t detach_id, const unsigned sync_reg,
                        const detach_continue_prop_t prop) {
-  return; //TODO: [kzz]
   if (!should_check())
     return;
 
@@ -613,7 +605,6 @@ CILKSAN_API void __csan_after_sync(csi_id_t sync_id, const unsigned sync_reg) {
 
 // Hook called at a sync
 CILKSAN_API void __csan_before_sync(csi_id_t sync_id, const unsigned sync_reg) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -641,7 +632,6 @@ CILKSAN_API void __csan_before_sync(csi_id_t sync_id, const unsigned sync_reg) {
 CILKSAN_API
 void __csan_load(csi_id_t load_id, const void *addr, int32_t size,
                  load_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -682,7 +672,6 @@ void __csan_load(csi_id_t load_id, const void *addr, int32_t size,
 CILKSAN_API
 void __csan_large_load(csi_id_t load_id, const void *addr, size_t size,
                        load_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -723,7 +712,6 @@ void __csan_large_load(csi_id_t load_id, const void *addr, size_t size,
 CILKSAN_API
 void __csan_store(csi_id_t store_id, const void *addr, int32_t size,
                   store_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -764,7 +752,6 @@ void __csan_store(csi_id_t store_id, const void *addr, int32_t size,
 CILKSAN_API
 void __csan_large_store(csi_id_t store_id, const void *addr, size_t size,
                         store_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -808,7 +795,6 @@ void __csan_large_store(csi_id_t store_id, const void *addr, size_t size,
 CILKSAN_API
 void __csi_after_alloca(const csi_id_t alloca_id, const void *addr,
                         size_t size, const alloca_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -834,7 +820,6 @@ void __csan_after_allocfn(const csi_id_t allocfn_id,
                           size_t size, size_t num, size_t alignment,
                           __attribute__((noescape)) const void *oldaddr,
                           const allocfn_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -929,7 +914,6 @@ CILKSAN_API void __csan_alloc_posix_memalign(const csi_id_t allocfn_id,
                                              const allocfn_prop_t prop,
                                              int result, void **ptr,
                                              size_t alignment, size_t size) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -952,7 +936,6 @@ CILKSAN_API void __csan_alloc_memalign(const csi_id_t allocfn_id,
                                        unsigned MAAP_count,
                                        const allocfn_prop_t prop, char *result,
                                        size_t alignment, size_t size) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -975,7 +958,6 @@ CILKSAN_API void __csan_alloc_strdup(const csi_id_t allocfn_id,
                                      unsigned MAAP_count,
                                      const allocfn_prop_t prop, char *result,
                                      const char *str) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -1031,7 +1013,6 @@ CILKSAN_API void __csan_alloc_strndup(const csi_id_t allocfn_id,
                                       unsigned MAAP_count,
                                       const allocfn_prop_t prop, char *result,
                                       const char *str, size_t size) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -1101,7 +1082,6 @@ CILKSAN_API
 void __csan_after_free(const csi_id_t free_id,
                        __attribute__((noescape)) const void *ptr,
                        const free_prop_t prop) {
-  return; //TODO: [kzz]
   if (!CILKSAN_INITIALIZED)
     return;
 
@@ -1133,13 +1113,11 @@ CILKSAN_API bool __cilksan_should_check(void) {
 }
 
 CILKSAN_API void __cilksan_record_alloc(void *addr, size_t size) {
-  return; //TODO: [kzz]
   CheckingRAII nocheck;
   CilkSanImpl.mark_alloc(addr, size);
 }
 
 CILKSAN_API void __cilksan_record_free(void *ptr) {
-  return; //TODO: [kzz]
   CheckingRAII nocheck;
   if (!should_check()) {
     CilkSanImpl.mark_free(ptr);

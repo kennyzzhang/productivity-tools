@@ -4,7 +4,6 @@
 #define _LOCKSETS_H
 
 #include "debug_util.h"
-#include "dictionary.h"
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -250,12 +249,12 @@ public:
 // MemoryAccess_t describing the corresponding memory access.
 class Locker_t {
 public:
-  MemoryAccess_t access;
+  int access;
   LockSet_t lockset;
   Locker_t *next = nullptr;
 
   // Constructor
-  Locker_t(const MemoryAccess_t &access, const LockSet_t &lockset,
+  Locker_t(const int &access, const LockSet_t &lockset,
            Locker_t *next = nullptr)
       : access(access), lockset(lockset), next(next) {}
   // Destructor
@@ -267,8 +266,8 @@ public:
   }
 
   // Get the disjoint-set node for the function associated with this locker
-  const MemoryAccess_t &getAccess() const { return access; }
-  MemoryAccess_t &getAccess() { return access; }
+  const int &getAccess() const { return access; }
+  int &getAccess() { return access; }
 
   // Get the lockset for this locker
   const LockSet_t &getLockSet() const { return lockset; }
@@ -282,10 +281,7 @@ public:
   }
   bool operator!=(const Locker_t &that) const { return !(*this == that); }
   bool operator<(const Locker_t &that) const {
-    uintptr_t thisFunc = reinterpret_cast<uintptr_t>(access.getFunc());
-    uintptr_t thatFunc = reinterpret_cast<uintptr_t>(that.access.getFunc());
-    return (thisFunc < thatFunc) ||
-           ((thisFunc == thatFunc) && (lockset < that.lockset));
+    return false;
   }
 };
 

@@ -1,11 +1,8 @@
 #include "cilkpiston_internal.h"
 #include "debug_util.h"
-#include "disjointset.h"
 #include "driver.h"
 #include "frame_data.h"
-#include "race_detect_update.h"
-#include "simple_shadow_mem.h"
-#include "spbag.h"
+#include "piston_shadow.h"
 #include "stack.h"
 #include <cstdio>
 #include <cstdlib>
@@ -80,81 +77,18 @@ void *CilksanDoesNotSupportStaticLinkage() {
 //  Analysis data structures and fields
 // -------------------------------------------------------------------------
 
-template <>
-DisjointSet_t<call_stack_t>::DisjointSet_t(call_stack_t data, SBag_t *bag)
-    : _parent_or_bag(bag), _data(data), _rank(0), _ref_count(0)
-#if DISJOINTSET_DEBUG
-      ,
-      _ID(DS_ID++), _destructing(false)
-#endif
-{
-  bag->set_ds(this);
-
-  WHEN_DISJOINTSET_DEBUG(
-      DBG_TRACE(DISJOINTSET, "Creating DS %ld for SBag %p\n", _ID, bag));
-  WHEN_CILKSAN_DEBUG(debug_count++);
-}
-
-template <>
-DisjointSet_t<call_stack_t>::DisjointSet_t(call_stack_t data, PBag_t *bag)
-    : _parent_or_bag(bag), _data(data), _rank(0), _ref_count(0)
-#if DISJOINTSET_DEBUG
-      ,
-      _ID(DS_ID++), _destructing(false)
-#endif
-{
-  bag->set_ds(this);
-
-  WHEN_DISJOINTSET_DEBUG(
-      DBG_TRACE(DISJOINTSET, "Creating DS %ld for PBag %p\n", _ID, bag));
-  WHEN_CILKSAN_DEBUG(debug_count++);
-}
-
-static_assert(alignof(DisjointSet_t<call_stack_t>) >= 8,
-              "Bad alignment for DisjointSet_t structure.");
-
-#if CILKSAN_DEBUG
-template<>
-long DisjointSet_t<call_stack_t>::debug_count = 0;
-
-long SBag_t::debug_count = 0;
-long PBag_t::debug_count = 0;
-#endif
-
-// Free lists for SBags and PBags
-SBag_t::FreeNode_t *SBag_t::free_list = nullptr;
-PBag_t::FreeNode_t *PBag_t::free_list = nullptr;
-
 // Code to handle references to the stack.
+
+// Free list for call-stack nodes
+call_stack_node_t *call_stack_node_t::free_list = nullptr;
+
 
 // Range of stack used by the process
 uintptr_t stack_low_addr = (uintptr_t)-1;
 uintptr_t stack_high_addr = 0;
 
-// Free list for call-stack nodes
-call_stack_node_t *call_stack_node_t::free_list = nullptr;
-
 // Global object to manage Cilksan data structures.
 CilkSanImpl_t CilkSanImpl;
-
-// Initialize custom memory allocators for dictionaries in shadow memory.
-template <>
-MALineAllocator &
-    SimpleDictionary<0>::MAAlloc = CilkSanImpl.getMALineAllocator(0);
-template <>
-MALineAllocator &
-    SimpleDictionary<1>::MAAlloc = CilkSanImpl.getMALineAllocator(1);
-template <>
-MALineAllocator &
-    SimpleDictionary<2>::MAAlloc = CilkSanImpl.getMALineAllocator(2);
-
-template <>
-DisjointSet_t<call_stack_t>::DSAllocator &
-    DisjointSet_t<call_stack_t>::Alloc = CilkSanImpl.getDSAllocator();
-
-template <>
-DisjointSet_t<call_stack_t>::List_t &
-    DisjointSet_t<call_stack_t>::disjoint_set_list = CilkSanImpl.getDSList();
 
 ////////////////////////////////////////////////////////////////////////
 // Events functions
@@ -172,19 +106,11 @@ inline void CilkSanImpl_t::start_new_function(unsigned num_sync_reg) {
   // Get the parent pointer after we push, because once pused, the
   // pointer may no longer be valid due to resize.
   FrameData_t *parent = frame_stack.ancestor(1);
-  WHEN_CILKSAN_DEBUG(
-      { DBG_TRACE(CALLBACK, "parent frame %ld.\n", parent->frame_id); });
-  SBag_t *child_sbag;
-
   FrameData_t *child = frame_stack.head();
-  cilksan_assert(child->Sbag == NULL);
-  cilksan_assert(child->Pbags == NULL);
-  cilksan_assert(child->num_Pbags == 0);
 
-  DBG_TRACE(BAGS, "Creating SBag for frame %ld\n", frame_id);
-  child_sbag = createNewSBag(frame_id, call_stack);
-
-  child->init_new_function(child_sbag);
+  cilksan_assert(num_sync_reg <= FrameData_t::MAX_SYNC_REG &&
+                 "Too many sync regions in one function.");
+  child->init_new_function(depth);
 
   if (parent->in_continuation())
     child->set_parent_continuation(1);
@@ -200,26 +126,20 @@ inline void CilkSanImpl_t::start_new_function(unsigned num_sync_reg) {
   cilksan_assert(child->reducer_views == nullptr &&
                  "New function has non-null table of reducer views");
 
-  if (num_sync_reg > 0) {
-    DBG_TRACE(BAGS, "Creating PBag array of size %d for frame %ld\n",
-              num_sync_reg, frame_id);
-    child->make_pbag_array(num_sync_reg);
-  } else {
-    DBG_TRACE(BAGS, "Skipping PBag-array creation for frame %ld\n", frame_id);
-  }
-
-  // We do the assertion after the init so that ref_count is 1.
-
   WHEN_CILKSAN_DEBUG(frame_stack.head()->frame_id = frame_id);
-
-  DBG_TRACE(CALLBACK, "Enter function id %ld\n", frame_id);
 }
 
 /// Helper function for exiting a function; counterpart of start_new_function.
 inline void CilkSanImpl_t::exit_function() {
+  FrameData_t *f = frame_stack.head();
+  // Close any P nodes this frame left open, then leave the frame's own node.
+  unwind_to(f->entry_depth);
+  for (unsigned i = 0; i < f->exit_decs; ++i)
+    step_out();
+
   // Popping doesn't actually destruct the object so we need to
   // manually dec the ref counts here.
-  frame_stack.head()->reset();
+  f->reset();
   frame_stack.pop();
 }
 
@@ -233,8 +153,6 @@ inline void CilkSanImpl_t::enter_cilk_function(unsigned num_sync_reg) {
 inline void CilkSanImpl_t::leave_cilk_function(unsigned sync_reg) {
   DBG_TRACE(CALLBACK,
             "leaving a Cilk function (spawner or helper), pop frame_stack\n");
-
-  // param: not returning from a spawn, sync region 0.
   exit_function();
 }
 
@@ -243,29 +161,23 @@ inline void CilkSanImpl_t::leave_cilk_function(unsigned sync_reg) {
 inline void CilkSanImpl_t::return_from_detach(unsigned sync_reg) {
   DBG_TRACE(CALLBACK, "return from detach, pop frame_stack\n");
   cilksan_assert(isDetacher(frame_stack.head()->frame_data));
-
-  // param: we are returning from a spawn
+  // Leaves the spawned child's S node, back up to the spawn's P node.
   exit_function();
 }
 
 /// Action performed immediately after passing a sync.
 inline void CilkSanImpl_t::complete_sync(unsigned sync_reg) {
   FrameData_t *f = frame_stack.head();
-  DBG_TRACE(CALLBACK, "frame %d done sync\n", f->Sbag->get_func_id());
-
-  // Pbag could be NULL if we encounter a sync without any spawn (i.e., any Cilk
-  // function that executes the base case)
-  cilksan_assert(sync_reg < f->num_Pbags && "Invalid sync_reg");
-  cilksan_assert(f->Pbags && "Cannot sync NULL pbags array");
-  if (f->Pbags[sync_reg]) {
-    DBG_TRACE(BAGS, "Merge P-bag %d (%p) in frame %ld into S-bag.\n",
-              sync_reg, f->Pbags[sync_reg], f->Sbag->get_func_id());
-    // if (f->is_Pbag_used()) {
-    f->Sbag->combine(f->Pbags[sync_reg]);
-    f->set_Sbag_used();
-    // }
-    f->set_pbag(sync_reg, NULL);
-  }
+  cilksan_assert(sync_reg < FrameData_t::MAX_SYNC_REG && "Invalid sync_reg");
+  int32_t base = f->sync_base[sync_reg];
+  if (base < 0)
+    return;
+  // Close the P nodes of every spawn in this sync region.  Sync regions nest,
+  // so any other region opened above base is closed too.
+  unwind_to(base);
+  for (unsigned i = 0; i < FrameData_t::MAX_SYNC_REG; ++i)
+    if (f->sync_base[i] >= base)
+      f->sync_base[i] = -1;
 }
 
 //---------------------------------------------------------------
@@ -273,53 +185,40 @@ inline void CilkSanImpl_t::complete_sync(unsigned sync_reg) {
 //---------------------------------------------------------------
 void CilkSanImpl_t::do_enter(unsigned num_sync_reg) {
   WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == NONE));
-  WHEN_CILKSAN_DEBUG(last_event = ENTER_FRAME);
   DBG_TRACE(CALLBACK, "frame %ld cilk_enter_frame_begin, stack depth %d\n",
             frame_id + 1, frame_stack.size());
+  // A called Cilk function is composed in series with its caller, so it runs
+  // in the caller's current S node.
   enter_cilk_function(num_sync_reg);
   frame_stack.head()->frame_data = EntryFrameType::SPAWNER_SHADOW_FRAME;
-
-  WHEN_CILKSAN_DEBUG(
-      cilksan_assert(last_event == ENTER_FRAME || last_event == ENTER_HELPER));
-  WHEN_CILKSAN_DEBUG(last_event = NONE);
-  DBG_TRACE(CALLBACK, "cilk_enter_end\n");
 }
 
 void CilkSanImpl_t::do_enter_helper(unsigned num_sync_reg) {
   WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
   DBG_TRACE(CALLBACK, "frame %ld cilk_enter_helper_begin\n", frame_id + 1);
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == NONE));
-  WHEN_CILKSAN_DEBUG(last_event = ENTER_HELPER;);
-
+  // A spawn opens a P node whose children are the spawned task and the
+  // continuation.  Step into the P node, then into the task's S node.
+  step_in();
+  step_in();
   enter_cilk_function(num_sync_reg);
-  frame_stack.head()->frame_data = EntryFrameType::DETACHER_SHADOW_FRAME;
-
-  WHEN_CILKSAN_DEBUG(
-      cilksan_assert(last_event == ENTER_FRAME || last_event == ENTER_HELPER));
-  WHEN_CILKSAN_DEBUG(last_event = NONE);
-  DBG_TRACE(CALLBACK, "cilk_enter_end\n");
+  FrameData_t *f = frame_stack.head();
+  f->frame_data = EntryFrameType::DETACHER_SHADOW_FRAME;
+  f->exit_decs = 1;
 }
 
 void CilkSanImpl_t::do_detach() {
-  WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == NONE));
-  WHEN_CILKSAN_DEBUG(last_event = DETACH);
-
   update_strand_stats();
-  shadow_memory->clearOccupied();
-
   DBG_TRACE(CALLBACK, "cilk_detach\n");
+}
 
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == DETACH));
-  WHEN_CILKSAN_DEBUG(last_event = NONE);
-
-  // At this point, the frame_stack.head is still the parent (spawning) frame
-  WHEN_CILKSAN_DEBUG({
-    FrameData_t *parent = frame_stack.head();
-    DBG_TRACE(CALLBACK, "frame %ld about to spawn.\n",
-              parent->Sbag->get_func_id());
-  });
+// Called in the spawning frame just before a spawn in sync region sync_reg.
+void CilkSanImpl_t::do_spawn_prepare(unsigned sync_reg) {
+  FrameData_t *f = frame_stack.head();
+  cilksan_assert(sync_reg < FrameData_t::MAX_SYNC_REG && "Invalid sync_reg");
+  // The first spawn since the last sync of this region fixes the depth that
+  // the region's next sync returns to.
+  if (f->sync_base[sync_reg] < 0)
+    f->sync_base[sync_reg] = depth;
 }
 
 void CilkSanImpl_t::do_detach_continue(unsigned sync_reg) {
@@ -328,7 +227,11 @@ void CilkSanImpl_t::do_detach_continue(unsigned sync_reg) {
 
   reduce_local_views();
   update_strand_stats();
-  shadow_memory->clearOccupied();
+  // Returning from the spawned task left us at the spawn's P node; step into
+  // the continuation's S node.  (After an implicit sync on an unwind, we are
+  // already at an S node.)
+  if (depth & 1)
+    step_in();
   frame_stack.head()->enter_continuation(sync_reg);
 }
 
@@ -336,122 +239,53 @@ void CilkSanImpl_t::do_loop_iteration_begin(unsigned num_sync_reg) {
   DBG_TRACE(CALLBACK, "do_loop_iteration_begin()\n");
   if (start_new_loop) {
     // The first time we enter the loop, create a LOOP_FRAME at the head of
-    // frame_stack.
+    // frame_stack.  The frame sits at the loop's P node, whose children are
+    // the iterations.
     DBG_TRACE(CALLBACK, "starting new loop\n");
-    // Start a new frame.
-    do_enter_helper(num_sync_reg > 0 ? num_sync_reg : 1);
-    // Set this frame's type as LOOP_FRAME.
+    step_in();
+    enter_cilk_function(num_sync_reg > 0 ? num_sync_reg : 1);
     FrameData_t *func = frame_stack.head();
-    func->frame_data = setLoopFrame(func->frame_data);
-    // Create a new iteration bag for this frame.
-    DBG_TRACE(BAGS, "frame %ld creates an Iter-bag ",
-              func->Sbag->get_func_id());
-    func->create_iterbag();
-    DBG_TRACE(BAGS, "%p\n", func->Iterbag);
-    // Finish initializing the frame.
+    func->frame_data = setLoopFrame(EntryFrameType::DETACHER_SHADOW_FRAME);
+    func->exit_decs = 1;
     do_detach();
     start_new_loop = false;
   } else {
     cilksan_assert(in_loop());
     update_strand_stats();
-    shadow_memory->clearOccupied();
     frame_stack.head()->enter_loop_continuation();
   }
+  // Step into this iteration's S node.
+  step_in();
 }
 
 void CilkSanImpl_t::do_loop_iteration_end() {
   reduce_local_views();
   update_strand_stats();
-  shadow_memory->clearOccupied();
-  frame_stack.head()->exit_loop_continuation();
-
-  // At the end of each iteration, update the LOOP_FRAME for reuse.
-  DBG_TRACE(CALLBACK, "do_loop_iteration_end()\n");
   FrameData_t *func = frame_stack.head();
+  func->exit_loop_continuation();
+  DBG_TRACE(CALLBACK, "do_loop_iteration_end()\n");
   cilksan_assert(in_loop());
-  // Get this frame's P-bag, creating it if necessary.
-  PBag_t *my_pbag = func->Pbags[0];
-  if (!my_pbag) {
-    DBG_TRACE(BAGS, "frame %ld creates a P-bag ", func->Sbag->get_func_id());
-    my_pbag = createNewPBag();
-    func->set_pbag(0, my_pbag);
-    DBG_TRACE(BAGS, "%p\n", my_pbag);
-  }
-  cilksan_assert(my_pbag);
-
-  // Merge the S-bag into the P-bag.
-  SBag_t *my_sbag = func->Sbag;
-  uint64_t func_id = my_sbag->get_func_id();
-  if (func->is_Sbag_used()) {
-    DBG_TRACE(BAGS, "Merge S-bag in loop frame %ld into P-bag.\n", func_id);
-    my_pbag->combine(my_sbag);
-    // func->set_Pbag_used();
-
-    // Create a new S-bag for the frame.
-    DBG_TRACE(BAGS, "frame %ld creates an S-bag ", func_id);
-    func->set_sbag(createNewSBag(func_id, call_stack));
-    DBG_TRACE(BAGS, "%p\n", func->Sbag);
-  }
-
-  // Increment the Iter-frame.
-  if (!func->inc_version()) {
-    // Combine the Iter-bag into this P-bag.
-    if (func->is_Iterbag_used()) {
-      DBG_TRACE(BAGS, "Merge Iter-bag in loop frame %ld into P-bag.\n",
-                func_id);
-      my_pbag->combine(func->Iterbag);
-      // func->set_Pbag_used();
-
-      // Create a new Iter-bag.
-      DBG_TRACE(BAGS, "frame %ld creates an Iter-bag ", func_id);
-      func->create_iterbag();
-      DBG_TRACE(BAGS, "%p\n", func->Iterbag);
-    }
-  }
+  // Leave this iteration's S node, back to the loop's P node.
+  unwind_to(func->entry_depth + 1);
+  step_out();
+  func->clear_sync_bases();
 }
 
 void CilkSanImpl_t::do_loop_end(unsigned sync_reg) {
   DBG_TRACE(CALLBACK, "do_loop_end()\n");
-  FrameData_t *func = frame_stack.head();
+  if (start_new_loop) {
+    // The loop ran no iterations, so no loop frame was created.
+    start_new_loop = false;
+    return;
+  }
   cilksan_assert(in_loop());
-  // Get this frame's P-bag, creating it if necessary.
-  PBag_t *my_pbag = func->Pbags[0];
-  if (!my_pbag) {
-    DBG_TRACE(BAGS, "frame %ld creates a P-bag ", func->Sbag->get_func_id());
-    my_pbag = createNewPBag();
-    func->set_pbag(0, my_pbag);
-    DBG_TRACE(BAGS, "%p\n", my_pbag);
-  }
-  cilksan_assert(my_pbag);
-
-  // Combine the Iter-bag into this P-bag.
-  if (func->is_Iterbag_used()) {
-    DBG_TRACE(BAGS, "Merge Iter-bag in loop frame %ld into P-bag.\n",
-              my_pbag->get_func_id());
-    my_pbag->combine(func->Iterbag);
-    // func->set_Pbag_used();
-  }
-  // The loop frame is done, so clear the Iter-bag.
-  func->set_iterbag(nullptr);
-
-  // Return from the frame.
+  // Return from the loop frame, leaving the loop's P node.
   do_leave(sync_reg);
 }
 
 void CilkSanImpl_t::do_sync(unsigned sync_reg) {
   WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  DBG_TRACE(CALLBACK, "frame %ld cilk_sync_begin\n",
-            frame_stack.head()->Sbag->get_func_id());
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == NONE));
-  WHEN_CILKSAN_DEBUG(last_event = CILK_SYNC);
-
   update_strand_stats();
-  shadow_memory->clearOccupied();
-
-  DBG_TRACE(CALLBACK, "cilk_sync_end\n");
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == CILK_SYNC));
-  WHEN_CILKSAN_DEBUG(last_event = NONE);
-
   reduce_local_views();
   complete_sync(sync_reg);
   frame_stack.head()->exit_continuation(sync_reg);
@@ -459,87 +293,41 @@ void CilkSanImpl_t::do_sync(unsigned sync_reg) {
 
 void CilkSanImpl_t::do_leave(unsigned sync_reg) {
   WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == NONE));
-  WHEN_CILKSAN_DEBUG(last_event = LEAVE_FRAME_OR_HELPER);
-  DBG_TRACE(CALLBACK, "frame %ld cilk_leave_begin\n",
-            frame_stack.head()->frame_id);
   cilksan_assert(frame_stack.size() > 1);
 
   EntryFrameType EFT = frame_stack.head()->frame_data;
-  if (isSpawner(EFT)) {
-    DBG_TRACE(CALLBACK, "cilk_leave_frame_begin\n");
-  } else if (isHelper(EFT)) {
-    DBG_TRACE(CALLBACK, "cilk_leave_helper_begin\n");
-  } else if (isDetacher(EFT)) {
-    DBG_TRACE(CALLBACK, "cilk_leave_begin from detach\n");
-  }
-
   if (isDetacher(EFT))
     return_from_detach(sync_reg);
   else
     leave_cilk_function(sync_reg);
-
-  DBG_TRACE(CALLBACK, "cilk_leave_end\n");
-  WHEN_CILKSAN_DEBUG(cilksan_assert(last_event == LEAVE_FRAME_OR_HELPER));
-  WHEN_CILKSAN_DEBUG(last_event = NONE);
 }
 
-// called by do_read and do_write.
-template <bool is_read, MAType_t type>
-__attribute__((always_inline)) void
-CilkSanImpl_t::record_mem_helper(const csi_id_t acc_id, uintptr_t addr,
-                                 size_t mem_size, unsigned alignment) {
-  // Do nothing for 0-byte accesses
-  if (!mem_size)
-    return;
-
-  // Use fast path for small, statically aligned accesses.
-  if (alignment && mem_size <= alignment &&
-      alignment <= (1 << SimpleShadowMem::getLgSmallAccessSize())) {
-    // We're committed to using the fast-path check.  Update the occupied bits,
-    // and if that process discovers unoccupied entries, perform the check.
-    if (shadow_memory->setOccupiedFast(is_read, addr, mem_size)) {
-      FrameData_t *f = frame_stack.head();
-      check_races_and_update_fast<is_read>(acc_id, type, addr, mem_size, f,
-                                           *shadow_memory);
+// Check races on memory [addr, addr+mem_size) with this access, then record
+// the access in the shadow memory, as Cilksan does: a race occurs when a
+// previous access is logically parallel with the current strand, and a
+// previous access is replaced only by one that follows it in series.
+template <bool is_read>
+inline void CilkSanImpl_t::check_and_update(const csi_id_t acc_id,
+                                            MAType_t type, uintptr_t addr,
+                                            size_t mem_size) {
+  piston_t::iterator cur = piston.end();
+  AccessLoc_t loc(acc_id, type, call_stack);
+  for (uintptr_t a = addr; a < addr + mem_size; ++a) {
+    PistonShadowEntry_t &e = shadow_memory->get(a);
+    bool writer_parallel =
+        e.writer.valid() && parallel_with_current(e.writer.pos);
+    if (writer_parallel)
+      report_race(e.writer.loc, loc, a, is_read ? WR_RACE : WW_RACE);
+    if (is_read) {
+      if (!e.reader.valid() || !parallel_with_current(e.reader.pos))
+        e.reader.set(cur, loc);
+    } else {
+      if (e.reader.valid() && parallel_with_current(e.reader.pos))
+        report_race(e.reader.loc, loc, a, RW_RACE);
+      if (!writer_parallel)
+        e.writer.set(cur, loc);
     }
-    // Return early.
-    return;
   }
-
-  FrameData_t *f = frame_stack.head();
-  check_races_and_update<is_read>(acc_id, type, addr, mem_size, f,
-                                  *shadow_memory);
-}
-
-// called by do_locked_read and do_locked_write.
-template <bool is_read, MAType_t type>
-void CilkSanImpl_t::record_locked_mem_helper(const csi_id_t acc_id,
-                                             uintptr_t addr, size_t mem_size,
-                                             unsigned alignment) {
-  // Do nothing for 0-byte accesses
-  if (!mem_size)
-    return;
-
-  // TODO: Add a fast path for handling locked accesses.
-
-  // // Use fast path for small, statically aligned accesses.
-  // if (alignment && mem_size <= alignment &&
-  //     alignment <= (1 << SimpleShadowMem::getLgSmallAccessSize())) {
-  //   // We're committed to using the fast-path check.  Update the occupied bits,
-  //   // and if that process discovers unoccupied entries, perform the check.
-  //   if (shadow_memory->setOccupiedFast(is_read, addr, mem_size)) {
-  //     FrameData_t *f = frame_stack.head();
-  //     check_races_and_update_fast<is_read>(acc_id, type, addr, mem_size, f,
-  //                                          *shadow_memory);
-  //   }
-  //   // Return early.
-  //   return;
-  // }
-
-  FrameData_t *f = frame_stack.head();
-  check_data_races_and_update<is_read>(acc_id, type, addr, mem_size, f, lockset,
-                                       *shadow_memory);
 }
 
 void CilkSanImpl_t::record_free(uintptr_t addr, size_t mem_size,
@@ -547,174 +335,38 @@ void CilkSanImpl_t::record_free(uintptr_t addr, size_t mem_size,
   // Do nothing for 0-byte frees
   if (!mem_size)
     return;
-
-  FrameData_t *f = frame_stack.head();
-  if (locks_held()) {
-    check_data_races_and_update<false>(acc_id, type, addr, mem_size, f,
-                                       lockset, *shadow_memory);
-  } else {
-    check_races_and_update<false>(acc_id, type, addr, mem_size, f,
-                                  *shadow_memory);
-  }
-}
-
-// Check races on memory [addr, addr+mem_size) with this read access.  Once done
-// checking, update shadow_memory with this new read access.
-__attribute__((always_inline)) void check_races_and_update_with_read(
-    const csi_id_t acc_id, MAType_t type, uintptr_t addr, size_t mem_size,
-    FrameData_t *f, SimpleShadowMem &shadow_memory) {
-  shadow_memory.update_with_read(acc_id, type, addr, mem_size, f);
-  shadow_memory.check_race_with_prev_write<true>(acc_id, type, addr, mem_size,
-                                                 f);
-}
-
-// Check races on memory [addr, addr+mem_size) with this write access.  Once
-// done checking, update shadow_memory with this new read access.  Very similar
-// to check_races_and_update_with_read function.
-__attribute__((always_inline)) void check_races_and_update_with_write(
-    const csi_id_t acc_id, MAType_t type, uintptr_t addr, size_t mem_size,
-    FrameData_t *f, SimpleShadowMem &shadow_memory) {
-  shadow_memory.check_and_update_write(acc_id, type, addr, mem_size, f);
-  shadow_memory.check_race_with_prev_read(acc_id, type, addr, mem_size, f);
-}
-
-// Check races on memory [addr, addr+mem_size) with this memory access.  Once
-// done checking, update shadow_memory with the new access.
-//
-// is_read: whether or not this access reads memory
-// acc_id: ID of the memory-access instruction
-// type: type of memory access, e.g., a read/write, an allocation, a free
-// addr: memory address accessed
-// mem_size: number of bytes accessed, starting at addr
-// f: pointer to current frame on the shadow stack
-// shadow_memory: shadow memory recording memory access information
-template <bool is_read>
-void check_races_and_update(const csi_id_t acc_id, MAType_t type,
-                            uintptr_t addr, size_t mem_size, FrameData_t *f,
-                            SimpleShadowMem &shadow_memory) {
-  // Set the occupancy bits in the shadow memory, to deduplicate memory accesses
-  // in the same strand at runtime.  If we find that all occupancy bits for
-  // [addr, addr+mem_size) are already set, then this access is redundant with a
-  // previous access in the same strand, and we can quit early.
-  if (!shadow_memory.setOccupied(is_read, addr, mem_size))
-    return;
-
-  if (is_read)
-    check_races_and_update_with_read(acc_id, type, addr, mem_size, f,
-                                     shadow_memory);
-  else
-    check_races_and_update_with_write(acc_id, type, addr, mem_size, f,
-                                      shadow_memory);
-}
-
-// Fast-path check for races on memory [addr, addr+mem_size) with this memory
-// access.  Once done checking, update shadow_memory with the new access.
-// Assumes that mem_size is small and addr is aligned based on mem_size.
-//
-// is_read: whether or not this access reads memory
-// acc_id: ID of the memory-access instruction
-// type: type of memory access, e.g., a read/write, an allocation, a free
-// addr: memory address accessed
-// mem_size: number of bytes accessed, starting at addr
-// f: pointer to current frame on the shadow stack
-// shadow_memory: shadow memory recording memory access information
-template <bool is_read>
-__attribute__((always_inline)) void
-check_races_and_update_fast(const csi_id_t acc_id, MAType_t type,
-                            uintptr_t addr, size_t mem_size, FrameData_t *f,
-                            SimpleShadowMem &shadow_memory) {
-  if (is_read)
-    shadow_memory.check_read_fast(acc_id, type, addr, mem_size, f);
-  else
-    shadow_memory.check_write_fast(acc_id, type, addr, mem_size, f);
-}
-
-// Check data races on memory [addr, addr+mem_size) with this read access.  Once
-// done checking, update shadow_memory with this new read access.
-__attribute__((always_inline)) void check_data_races_and_update_with_read(
-    const csi_id_t acc_id, MAType_t type, uintptr_t addr, size_t mem_size,
-    FrameData_t *f, const LockSet_t &lockset, SimpleShadowMem &shadow_memory) {
-  shadow_memory.update_with_read(acc_id, type, addr, mem_size, f);
-  shadow_memory.update_lockers_with_read(acc_id, type, addr, mem_size, f,
-                                         lockset);
-  shadow_memory.check_data_race_with_prev_write<true>(acc_id, type, addr,
-                                                      mem_size, f, lockset);
-}
-
-// Check data races on memory [addr, addr+mem_size) with this write access.
-// Once done checking, update shadow_memory with this new read access.  Very
-// similar to check_data_races_and_update_with_read function.
-__attribute__((always_inline)) void check_data_races_and_update_with_write(
-    const csi_id_t acc_id, MAType_t type, uintptr_t addr, size_t mem_size,
-    FrameData_t *f, const LockSet_t &lockset, SimpleShadowMem &shadow_memory) {
-  shadow_memory.check_data_race_and_update_write(acc_id, type, addr, mem_size,
-                                                 f, lockset);
-  shadow_memory.check_data_race_with_prev_read(acc_id, type, addr, mem_size, f,
-                                               lockset);
-}
-
-// Check for data races on memory [addr, addr+mem_size) with this memory access.
-// Once done checking, update shadow_memory with the new access.
-//
-// is_read: whether or not this access reads memory
-// acc_id: ID of the memory-access instruction
-// type: type of memory access, e.g., a read/write, an allocation, a free
-// addr: memory address accessed
-// mem_size: number of bytes accessed, starting at addr
-// f: pointer to current frame on the shadow stack
-// lockset: set of currently held locks
-// shadow_memory: shadow memory recording memory access information
-template <bool is_read>
-void check_data_races_and_update(const csi_id_t acc_id, MAType_t type,
-                                 uintptr_t addr, size_t mem_size, FrameData_t *f,
-                                 const LockSet_t &lockset,
-                                 SimpleShadowMem &shadow_memory) {
-  // Set the occupancy bits in the shadow memory, to deduplicate memory accesses
-  // in the same strand at runtime.  If we find that all occupancy bits for
-  // [addr, addr+mem_size) are already set, then this access is redundant with a
-  // previous access in the same strand, and we can quit early.
-  if (!shadow_memory.setOccupied(is_read, addr, mem_size))
-    return;
-
-  if (is_read)
-    check_data_races_and_update_with_read(acc_id, type, addr, mem_size, f,
-                                          lockset, shadow_memory);
-  else
-    check_data_races_and_update_with_write(acc_id, type, addr, mem_size, f,
-                                           lockset, shadow_memory);
+  // TODO: Lock sets are not supported yet; check locked frees as unlocked.
+  check_and_update<false>(acc_id, type, addr, mem_size);
 }
 
 template <MAType_t type>
 void CilkSanImpl_t::do_read(const csi_id_t load_id, uintptr_t addr,
                             size_t mem_size, unsigned alignment) {
   WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  DBG_TRACE(MEMORY, "record read %lu: %lu bytes at addr %p and rip %p.\n",
-            load_id, mem_size, addr,
-            (load_id != UNKNOWN_CSI_ID) ? load_pc[load_id] : 0);
   if (collect_stats)
     collect_read_stat(mem_size);
 
-  bool on_stack = is_on_stack(addr);
-  if (on_stack)
+  if (is_on_stack(addr))
     advance_stack_frame(addr);
 
-  record_mem_helper<true, type>(load_id, addr, mem_size, alignment);
+  if (!mem_size)
+    return;
+  check_and_update<true>(load_id, type, addr, mem_size);
 }
 
 template <MAType_t type>
 void CilkSanImpl_t::do_write(const csi_id_t store_id, uintptr_t addr,
                              size_t mem_size, unsigned alignment) {
   WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  DBG_TRACE(MEMORY, "record write %ld: %lu bytes at addr %p and rip %p.\n",
-            store_id, mem_size, addr, store_pc[store_id]);
   if (collect_stats)
     collect_write_stat(mem_size);
 
-  bool on_stack = is_on_stack(addr);
-  if (on_stack)
+  if (is_on_stack(addr))
     advance_stack_frame(addr);
 
-  record_mem_helper<false, type>(store_id, addr, mem_size, alignment);
+  if (!mem_size)
+    return;
+  check_and_update<false>(store_id, type, addr, mem_size);
 }
 
 template void CilkSanImpl_t::do_read<MAType_t::RW>(const csi_id_t id,
@@ -740,39 +392,21 @@ template void CilkSanImpl_t::do_write<MAType_t::ALLOC>(const csi_id_t id,
                                                        size_t len,
                                                        unsigned alignment);
 
+// TODO: Lock sets are not supported yet.  Accesses made while holding a lock
+// (including atomics, when CILKSAN_CHECK_ATOMICS is set) are not checked or
+// recorded, so they cause no false races but can hide real ones.
 template <MAType_t type>
 void CilkSanImpl_t::do_locked_read(const csi_id_t load_id, uintptr_t addr,
                                    size_t mem_size, unsigned alignment) {
-  WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  DBG_TRACE(MEMORY,
-            "record read %lu: %lu bytes at addr %p and rip %p, locked.\n",
-            load_id, mem_size, addr,
-            (load_id != UNKNOWN_CSI_ID) ? load_pc[load_id] : 0);
-  if (collect_stats)
-    collect_read_stat(mem_size);
-
-  bool on_stack = is_on_stack(addr);
-  if (on_stack)
+  if (is_on_stack(addr))
     advance_stack_frame(addr);
-
-  record_locked_mem_helper<true, type>(load_id, addr, mem_size, alignment);
 }
 
 template <MAType_t type>
 void CilkSanImpl_t::do_locked_write(const csi_id_t store_id, uintptr_t addr,
                                     size_t mem_size, unsigned alignment) {
-  WHEN_CILKSAN_DEBUG(cilksan_assert(CILKSAN_INITIALIZED));
-  DBG_TRACE(MEMORY,
-            "record write %ld: %lu bytes at addr %p and rip %p, locked.\n",
-            store_id, mem_size, addr, store_pc[store_id]);
-  if (collect_stats)
-    collect_write_stat(mem_size);
-
-  bool on_stack = is_on_stack(addr);
-  if (on_stack)
+  if (is_on_stack(addr))
     advance_stack_frame(addr);
-
-  record_locked_mem_helper<false, type>(store_id, addr, mem_size, alignment);
 }
 
 template void CilkSanImpl_t::do_locked_read<MAType_t::RW>(
@@ -797,21 +431,12 @@ void CilkSanImpl_t::clear_shadow_memory(size_t start, size_t size) {
   shadow_memory->clear(start, size);
 }
 
+// TODO: Allocation sites are not tracked yet, so race reports do not say
+// where the racing memory was allocated.
 void CilkSanImpl_t::record_alloc(size_t start, size_t size,
-                                 csi_id_t alloca_id) {
-  if (!size)
-    return;
-  DBG_TRACE(MEMORY, "cilksan_record_alloc(%p, %ld)\n", start, size);
-  FrameData_t *f = frame_stack.head();
-  shadow_memory->record_alloc(start, size, f, alloca_id);
-}
+                                 csi_id_t alloca_id) {}
 
-void CilkSanImpl_t::clear_alloc(size_t start, size_t size) {
-  if (!size)
-    return;
-  DBG_TRACE(MEMORY, "cilksan_clear_alloc(%p, %ld)\n", start, size);
-  shadow_memory->clear_alloc(start, size);
-}
+void CilkSanImpl_t::clear_alloc(size_t start, size_t size) {}
 
 inline void CilkSanImpl_t::print_stats() {
   std::cout << ",size (bytes),count\n";
@@ -847,66 +472,6 @@ void CilkSanImpl_t::deinit() {
   // Optionally print statistics.
   if (collect_stats)
     print_stats();
-
-  // Remove references to the disjoint set nodes so they can be freed.
-  // We expect just 1 frame on the stack at this point, unless the
-  // program terminated from within a function, e.g., by calling
-  // exit().
-  bool foundNonemptyPBags = false;
-  // Return from all functions still on the stack.
-  while (frame_stack.size() > 1) {
-    FrameData_t *f = frame_stack.head();
-    // Check if there are any nonempty PBags in this frame.
-    if (f->Pbags) {
-      // We found nonempty PBags at program termination.  This
-      // typically should not happen unless the program exits from an
-      // unusual place, e.g., by calling exit() in a continuation.
-      if (!foundNonemptyPBags) {
-        std::cerr << "WARNING: Unsynchronized spawns detected!  Did the "
-                     "program terminate early?\n";
-        foundNonemptyPBags = true;
-      }
-
-      // Synchronize all Pbags.
-      for (unsigned sync_reg = 0; sync_reg < f->num_Pbags; ++sync_reg)
-        do_sync(sync_reg);
-    }
-
-    // Return from the function.
-    do_leave(0);
-  }
-
-  // Free the shadow memory
-  if (shadow_memory) {
-    delete shadow_memory;
-    shadow_memory = nullptr;
-  }
-
-  // Cleanup final frame.
-  frame_stack.head()->reset();
-  frame_stack.pop();
-  cilksan_assert(frame_stack.size() == 0);
-
-  WHEN_CILKSAN_DEBUG({
-      if (DisjointSet_t<call_stack_t>::debug_count != 0)
-        std::cerr << "DisjointSet_t<call_stack_t>::debug_count = "
-                  << DisjointSet_t<call_stack_t>::debug_count << "\n";
-      if (SBag_t::debug_count != 0)
-        std::cerr << "SBag_t::debug_count = "
-                  << SBag_t::debug_count << "\n";
-      if (PBag_t::debug_count != 0)
-        std::cerr << "PBag_t::debug_count = "
-                  << PBag_t::debug_count << "\n";
-    });
-
-  // Free the call-stack nodes in the free list.
-  call_stack_node_t::cleanup_freelist();
-
-  // Free the free lists for SBags and PBags.
-  SBag_t::cleanup_freelist();
-  PBag_t::cleanup_freelist();
-
-  DisjointSet_t<call_stack_t>::cleanup();
 }
 
 // called upon process exit
@@ -978,19 +543,10 @@ void CilkSanImpl_t::init() {
     }
   }
 
-  std::cerr << "Running Cilksan race detector.\n";
+  std::cerr << "Running CilkPiston race detector.\n";
 
   // these are true upon creation of the stack
   cilksan_assert(frame_stack.size() == 1);
 
-  shadow_memory = new SimpleShadowMem(*this);
-
-  // for the main function before we enter the first Cilk context
-  SBag_t *sbag;
-  DBG_TRACE(BAGS, "Creating SBag for frame %ld\n", frame_id);
-  sbag = createNewSBag(frame_id, call_stack);
-  frame_stack.head()->set_sbag(sbag);
-  WHEN_CILKSAN_DEBUG(frame_stack.head()->frame_data =
-                         setLoopFrame(frame_stack.head()->frame_data));
-  WHEN_CILKSAN_DEBUG(CILKSAN_INITIALIZED = true);
+  shadow_memory = new PistonShadowMem();
 }
