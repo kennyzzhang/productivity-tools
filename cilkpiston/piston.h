@@ -38,7 +38,7 @@ public:
     static T1 force_cast(T2 x) {
       T1 ret;
       *reinterpret_cast<T2*>(&ret) = x;
-     return ret;
+      return ret;
     }
 
     iterator(std::list<leftblock_t>::iterator block_it, unsigned subidx)
@@ -132,7 +132,6 @@ public:
   }
 
   void append_inc() {
-    // TODO: consider if we should maintain a cached value of lastblock?
     auto& lastblock = *std::prev(leftblocks.end());
     lastblock.smqbitarray |= 1ull << (block_bits - 1 - lastblock_subidx);
     lastblock.endval++;
@@ -143,7 +142,6 @@ public:
   }
 
   void append_dec() {
-    // TODO: consider if we should maintain a cached value of lastblock?
     auto& lastblock = *std::prev(leftblocks.end());
     lastblock.smqbitarray &= lastblock.smqbitarray - 1;
     lastblock.endval--;
