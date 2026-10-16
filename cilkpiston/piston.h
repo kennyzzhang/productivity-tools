@@ -156,7 +156,7 @@ public:
   }
 
 
-  __attribute__((noinline)) val_t rmq(iterator beg) const;
+  val_t rmq(iterator beg) const;
 
   void erase(iterator it) {
     //TODO: garbage collection
@@ -184,10 +184,10 @@ public:
 // Uses bzhi/shlx. ~8.9s
 
 #if defined(__x86_64__)
-#pragma clang attribute push (__attribute__((target("sse4,lzcnt,bmi2"))), apply_to=function)
+#pragma clang attribute push (__attribute__((target("sse4,lzcnt"))), apply_to=function)
 #endif
 // Uses popcnt. ~2.9s
-inline __attribute__((noinline)) piston_t::val_t piston_t::rmq(iterator beg) const {
+inline piston_t::val_t piston_t::rmq(iterator beg) const {
   const leftblock_t& leftblock = *beg.get_block_it();
   unsigned subidx = beg.get_subidx();
 
