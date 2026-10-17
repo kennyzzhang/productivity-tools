@@ -24,10 +24,7 @@ public:
   shadowmem_reservevm() {
     shadowmem = (uintptr_t) mmap(nullptr, vmem_shadow_size, PROT_READ | PROT_WRITE,
                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if ((void*)shadowmem == MAP_FAILED) {
-      perror("SHADOW MEM");
-      _exit(1);
-    }
+    assert((void*)shadowmem != MAP_FAILED && "SHADOW MEM");
     shadowmem_end = shadowmem + vmem_shadow_size;
     // outs_red << "Want mem size: " << vmem_shadow_size << " = 2^"
     //          << log2(vmem_shadow_size) << std::endl;

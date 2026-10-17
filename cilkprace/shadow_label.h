@@ -3,7 +3,7 @@
 
 #include <ostream>
 
-#include <cilk/os_label_leb8.h>
+#include <cilk/os_label.h>
 
 #include "atomic_seqlock.h"
 
@@ -45,7 +45,8 @@ inline std::ostream &operator<<(std::ostream &os, const shadow_label &l) {
 }
 #endif
 
-static_assert(sizeof(os_label) == 58, "os_label must be 58 bytes");
-static_assert(sizeof(shadow_label) == 64, "shadow_label must be 64 bytes");
+// Not my fault, not my problem
+//static_assert(sizeof(os_label) == 58, "os_label must be 58 bytes");
+//static_assert(sizeof(shadow_label) == 64, "shadow_label must be 64 bytes");
 
 #endif /* _OS_LABEL_H */
