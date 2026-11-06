@@ -64,6 +64,51 @@ void CilkpraceImpl_t::report_read_race(uintptr_t addr, csi_id_t load_id,
   _exit(EXIT_FAILURE);
 }
 
+#if CILKPRACE_ADAPTIVE_GRANULE
+// Writes of at least this many bytes merge the lines they cover back.
+constexpr size_t kMergeMinBytes = 1024;
+
+// Out of line: the accesses the inline line path doesn't handle. Returns the
+// first racing address in [beg, beg + num_bytes), or 0; the caller reports it
+// and, if the report returns (a race it ignores), resumes at the next byte.
+template <bool Write>
+__attribute__((noinline)) uintptr_t
+CilkpraceImpl_t::check_part_range(uintptr_t beg, size_t num_bytes,
+                                  const os_label &cur) {
+  constexpr uintptr_t G = CILKPRACE_GRANULARITY;
+  uintptr_t end = beg + num_bytes;
+  shadow_label *s = &shadow_mem.addr_to_shadow(beg);
+  for (uintptr_t g = beg / G * G; g < end; g += G, ++s) {
+    unsigned lo = g < beg ? beg - g : 0, hi = end - g < G ? end - g : G;
+    if (lo == 0 && hi == G) {
+      // Unlikely: only on a race. A reported race exits the program; only a
+      // race the tool ignores (CILKPRACE_IGNORE_STDLIB_RACES: cout, cerr)
+      // returns to the caller, which then checks the rest of the range.
+      if (CILKPRACE_UNLIKELY(Write ? s->does_write_race(cur) : s->does_read_race(cur)))
+        return g;
+    } else {
+      // The line path first (crossing accesses come here from the inline
+      // check with lines it could handle), then the general one.
+      unsigned r = Write ? s->does_write_race_line(cur, lo, hi - lo)
+                         : s->does_read_race_line(cur, lo, hi - lo);
+      // Unlikely: only on a race.
+      if (CILKPRACE_UNLIKELY(r >= 2))
+        return g + r - 2;
+      if (r == 1) {
+        if (unsigned q = Write ? s->does_write_race_part(cur, lo, hi)
+                               : s->does_read_race_part(cur, lo, hi))
+          return g + q - 1;
+      }
+    }
+  }
+  return 0;
+}
+template uintptr_t CilkpraceImpl_t::check_part_range<true>(uintptr_t, size_t,
+                                                           const os_label &);
+template uintptr_t CilkpraceImpl_t::check_part_range<false>(uintptr_t, size_t,
+                                                            const os_label &);
+#endif
+
 void CilkpraceImpl_t::register_write(uintptr_t beg, size_t num_bytes,
                                      csi_id_t store_id,
                                      const os_label& cur_lab) {
@@ -71,6 +116,27 @@ void CilkpraceImpl_t::register_write(uintptr_t beg, size_t num_bytes,
   size_t gran = shadow_mem.vmem_shadow_granularity;
   size_t num_granules = (num_bytes + gran - 1) / gran;
   shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+#if CILKPRACE_ADAPTIVE_GRANULE
+  // No hint: with lines longer than an access, most accesses cover part of one.
+  if ((beg | num_bytes) % gran) {
+    uintptr_t a = beg;
+    unsigned r = labels->does_write_race_line(cur_lab, beg % gran, num_bytes);
+    if (r == 0)
+      return;
+    if (r >= 2) {
+      a = beg / gran * gran + r - 2;
+      report_write_race(a, store_id, cur_lab, *labels);
+      ++a;
+    }
+    for (uintptr_t end = beg + num_bytes; a < end; ++a) {
+      a = check_part_range<true>(a, end - a, cur_lab);
+      if (!a)
+        break;
+      report_write_race(a, store_id, cur_lab, *labels);
+    }
+    return;
+  }
+#endif
 #if CILKPRACE_ABL_GRANULE_UNROLL
   #pragma unroll 2
 #endif
@@ -79,6 +145,21 @@ void CilkpraceImpl_t::register_write(uintptr_t beg, size_t num_bytes,
       report_write_race(beg + i * gran, store_id, cur_lab, labels[i]);
     }
   }
+#if CILKPRACE_ADAPTIVE_GRANULE
+  // A long write (a hoisted range check, a large copy) leaves the split lines
+  // it covers all its own: merge them back, so later checks of them are one
+  // entry each. Short writes don't, since in scattered writes a line would
+  // merge and split again.
+  if (num_bytes >= kMergeMinBytes)
+    for (size_t i = 0; i < num_granules; ++i)
+#if CILKPRACE_USE_LEB8_FLAT
+      if (CILKPRACE_UNLIKELY(leb8_flat_refined(labels[i])))
+        leb8_flat_merge(labels[i]);
+#else
+      if (uint64_t w = labels[i].entry; CILKPRACE_UNLIKELY(leb8_short_ptr_refined(w)))
+        leb8_short_ptr_merge(labels[i], w);
+#endif
+#endif
 }
 
 void CilkpraceImpl_t::register_write(uintptr_t beg, size_t num_bytes,
@@ -93,6 +174,27 @@ void CilkpraceImpl_t::register_read(uintptr_t beg, size_t num_bytes,
   size_t gran = shadow_mem.vmem_shadow_granularity;
   size_t num_granules = (num_bytes + gran - 1) / gran;
   shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+#if CILKPRACE_ADAPTIVE_GRANULE
+  // No hint: with lines longer than an access, most accesses cover part of one.
+  if ((beg | num_bytes) % gran) {
+    uintptr_t a = beg;
+    unsigned r = labels->does_read_race_line(cur_lab, beg % gran, num_bytes);
+    if (r == 0)
+      return;
+    if (r >= 2) {
+      a = beg / gran * gran + r - 2;
+      report_read_race(a, load_id, cur_lab, *labels);
+      ++a;
+    }
+    for (uintptr_t end = beg + num_bytes; a < end; ++a) {
+      a = check_part_range<false>(a, end - a, cur_lab);
+      if (!a)
+        break;
+      report_read_race(a, load_id, cur_lab, *labels);
+    }
+    return;
+  }
+#endif
 #if CILKPRACE_ABL_GRANULE_UNROLL
   #pragma unroll 2
 #endif
@@ -115,7 +217,17 @@ void CilkpraceImpl_t::register_alloca(uintptr_t beg, size_t num_bytes) {
   size_t end_gran = (beg + num_bytes - 1) / gran;
   size_t num_granules = end_gran - start_gran + 1;
   shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+#if CILKPRACE_ADAPTIVE_GRANULE
+  // Exactly the range: a line may hold other live bytes.
+  (void)num_granules;
+#if CILKPRACE_USE_LEB8_FLAT
+  leb8_flat_clear(labels, beg, num_bytes);
+#else
+  leb8_short_ptr_clear(labels, beg, num_bytes);
+#endif
+#else
   memset(labels, 0, num_granules * sizeof(shadow_label));
+#endif
 }
 
 static size_t heap_hash(uintptr_t addr) { return (addr >> 4) * 0x9E3779B97F4A7C15ULL; }
@@ -212,6 +324,17 @@ void CilkpraceImpl_t::register_free(uintptr_t beg, size_t num_bytes,
   size_t gran = shadow_mem.vmem_shadow_granularity;
   size_t num_granules = (num_bytes + gran - 1) / gran;
   shadow_label *labels = &shadow_mem.addr_to_shadow(beg);
+#if CILKPRACE_ADAPTIVE_GRANULE
+  if ((beg | num_bytes) % gran) {
+    for (uintptr_t a = beg, end = beg + num_bytes; a < end; ++a) {
+      a = check_part_range<true>(a, end - a, cur_lab);
+      if (!a)
+        break;
+      report_free_race(a, free_id, site);
+    }
+    return;
+  }
+#endif
   for (size_t i = 0; i < num_granules; ++i)
     if (CILKPRACE_UNLIKELY(labels[i].does_write_race(cur_lab)))
       report_free_race(beg + i * gran, free_id, site);

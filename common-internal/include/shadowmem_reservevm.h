@@ -31,6 +31,13 @@ public:
       _exit(1);
     }
     shadowmem_end = shadowmem + vmem_shadow_size;
+#ifdef MADV_DONTDUMP
+    // Keep the reservation out of core dumps. A dump otherwise writes the
+    // whole range (tens of TB, mostly never touched), and a piped core_pattern
+    // such as systemd-coredump ignores RLIMIT_CORE, so a crash would sit in
+    // the kernel for hours. Only one VMA, so this is O(1).
+    madvise((void *)shadowmem, vmem_shadow_size, MADV_DONTDUMP);
+#endif
     // outs_red << "Want mem size: " << vmem_shadow_size << " = 2^"
     //          << log2(vmem_shadow_size) << std::endl;
     // outs_red << "Class size (bytes): " << sizeof(os_label) << std::endl;

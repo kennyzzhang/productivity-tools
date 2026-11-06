@@ -30,6 +30,7 @@ public:
   inline uint32_t begin_read() { return 0; }
   inline bool read_was_safe(uint32_t old_seq) const { return true; }
   inline write_lock_t write_lock() { return *this; }
+  inline void reset() {}
 };
 
 #else
@@ -105,6 +106,10 @@ public:
       std::atomic_thread_fence(std::memory_order_acquire);
       return seq.load(std::memory_order_relaxed) == old_seq;
   }
+
+  // Makes a seqlock in recycled or uninitialized memory unlocked, before
+  // anything else can see it (leb8-flat's split blocks).
+  inline void reset() { seq.store(0, std::memory_order_relaxed); }
 };
 
 #endif // !SERIAL_TOOL

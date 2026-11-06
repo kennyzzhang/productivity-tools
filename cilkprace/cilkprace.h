@@ -77,6 +77,13 @@ class CilkpraceImpl_t {
 //  shadowmem_pagetable<shadow_label, 4, 18, 18, 10> shadow_mem;
   bool ignore_stdlib_races;
 
+#if CILKPRACE_ADAPTIVE_GRANULE
+  // For a range that covers some granule only in part: the address of the
+  // first race, or 0.
+  template <bool Write>
+  uintptr_t check_part_range(uintptr_t beg, size_t num_bytes, const os_label &cur);
+#endif
+
 public:
   CilkpraceImpl_t();
   ~CilkpraceImpl_t();

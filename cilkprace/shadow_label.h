@@ -3,6 +3,8 @@
 
 #if defined(CILKPRACE_USE_LEB8_PTR)
 #include "leb8-ptr.h"
+#elif defined(CILKPRACE_USE_LEB8_FLAT)
+#include "leb8-flat.h"
 #elif defined(CILKPRACE_USE_LEB8_SHORT_PTR)
 #include "leb8-short-ptr.h"
 #elif defined(USE_OS_LABEL_STRING)
