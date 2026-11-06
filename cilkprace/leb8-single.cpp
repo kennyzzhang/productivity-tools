@@ -1,3 +1,5 @@
+#include <mutex>
+
 #include "shadow_label.h"
 
 // An inline is_identical check was once removed from here for costing 16% at 1
