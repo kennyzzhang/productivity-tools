@@ -97,7 +97,8 @@ set(CILKPRACE_DYNAMIC_LIBS ${CILKPRACE_COMMON_LIBS})
 
 
 # Setup flags and defs for cilktool bitcode build
-set(CILKPRACE_BITCODE_CFLAGS ${CILKPRACE_CFLAGS} -emit-llvm -g -O3)
+# No C1->C2 constructor aliases: after bitcode linking they otherwise trip FunctionAttrs (empty-function DomTree assert).
+set(CILKPRACE_BITCODE_CFLAGS ${CILKPRACE_CFLAGS} -emit-llvm -Xclang -mno-constructor-aliases -g -O3)
 set(CILKPRACE_BITCODE_DEFINITIONS ${CILKPRACE_COMMON_DEFINITIONS}
     "CILKPRACE_VIS=")
 
